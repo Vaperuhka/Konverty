@@ -1,0 +1,20 @@
+{
+  "name": "Конверты — учёт денег",
+  "short_name": "Конверты",
+  "description": "Учёт доходов, расходов и долгов с распределением денег по конвертам",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f4f6",
+  "theme_color": "#12a594",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
