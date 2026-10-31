@@ -2093,7 +2093,7 @@ function _postRecurringMonth(r, ym){
   } else {
     tx={id:uid(),type:'expense',date,currency:a.currency,amount:round2(r.amount),accountId:r.accountId,envelopeId:a.investment?null:r.envelopeId,categoryId:r.categoryId,note:r.note||''};
   }
-  state.transactions.push(tx); return true;
+  tx.recurId=r.id; tx.recurYm=ym; state.transactions.push(tx); return true;   // метки: защита от повторного проведения того же шаблона за тот же месяц
 }
 // M5: провести шаблон за ВСЕ пропущенные месяцы (от lastPosted+1 до текущего). Возвращает число проведённых.
 function _postRecurring(r){
@@ -2103,7 +2103,10 @@ function _postRecurring(r){
   let n=0;
   while(ym<=nowYm){
     const dueDay=Math.min(r.day||1, daysInMonth(ym));
-    if(ym<nowYm || dueDay<=today){ if(_postRecurringMonth(r,ym)){ n++; r.lastPosted=ym; } }
+    if(ym<nowYm || dueDay<=today){
+      if(state.transactions.some(t=>t.recurId===r.id && t.recurYm===ym)){ r.lastPosted=ym; }   // уже есть операция за этот месяц — не дублируем (защита от сбоя lastPosted/синхронизации)
+      else if(_postRecurringMonth(r,ym)){ n++; r.lastPosted=ym; }
+    }
     ym=ymNext(ym);
   }
   return n;
@@ -2199,7 +2202,8 @@ function renderRecurringForm(){
     <label class="field"><span>${f.type==='income'?'Зачислять на счёт':'Списывать со счёта'}</span><select class="input" id="rec-acc" onchange="recSetAcc(this.value)">${accOpts}</select></label>
     ${(f.type==='expense'&&!inv)?`<label class="field"><span>Конверт (бюджет)</span><select class="input" id="rec-env">${envOpts}</select></label>`:''}
     <label class="field"><span>Категория</span><select class="input" id="rec-cat">${catOpts}</select></label>
-    <label class="field"><span>День месяца (1–31)</span><input class="input" id="rec-day" type="number" inputmode="numeric" min="1" max="31" value="${f.day}"></label>
+    <label class="field"><span>День месяца (1–31)</span><input class="input" id="rec-day" type="number" inputmode="numeric" min="1" max="31" value="${f.day}" onchange="captureRec();renderRecurringForm()"></label>
+    ${!f.id?`<div class="small-note" style="margin:-6px 2px 10px">${(()=>{ const dd=Math.max(1,Math.min(31,parseInt(f.day)||1)); const ym=todayISO().slice(0,7); const td=+todayISO().slice(8,10); const eff=Math.min(dd,daysInMonth(ym)); return td<eff ? `Первое списание: <b>${String(eff).padStart(2,'0')}.${ym.slice(5)}</b> — в этом месяце.` : `⚠️ День ${dd} в этом месяце уже прошёл (сегодня ${td}-е). При «авто» спишется <b>сразу за текущий месяц</b>. Чтобы начать со следующего — поставь день больше ${td}.`; })()}</div>`:''}
     <label class="field"><span>Название / комментарий</span><input class="input" id="rec-note" value="${esc(f.note)}" placeholder="Например: Аренда"></label>
     <label class="field" style="display:flex;align-items:center;gap:10px;flex-direction:row">
       <input type="checkbox" id="rec-auto" ${f.auto?'checked':''} style="width:20px;height:20px"><span style="margin:0">Проводить автоматически (без ручного «Внести»)</span></label>
@@ -2495,6 +2499,9 @@ async function syncNow(silent){
     } else if(!remote || localRev>remoteRev){
       await syncPush(); syncMarkAt(); if(!silent) toast('Выгружено в облако ✓');
     } else { syncMarkAt(); if(!silent) toast('Уже синхронизировано'); }
+    // Авто-платежи проводим ПОСЛЕ синхронизации, на свежем общем состоянии — иначе устройства
+    // (особенно при разнице часовых поясов) задваивают/расходятся по одному и тому же платежу.
+    try{ const n=autoPostDueRecurring(); if(n){ _balCache=null; render(); await syncPush(); syncMarkAt(); toast(`Автоматически проведено: ${n}`); } }catch(e){}
     if(currentTab==='more'&&moreView==='sync') renderMore();
   }catch(e){ if(!silent) toast('Ошибка синхронизации — проверь сеть и токен'); }
   finally{ _syncing=false; }
@@ -3170,7 +3177,7 @@ document.addEventListener('scroll', lpCancel, {passive:true});
 setTimeout(()=>{ const s=document.getElementById('splash'); if(s){ s.classList.add('hide'); setTimeout(()=>s.remove(),500); } }, 820);
 applyTheme(); load();
 let autoN=0;
-try { autoN=autoPostDueRecurring(); switchTab('ops'); }
+try { if(!syncConfigured()) autoN=autoPostDueRecurring(); switchTab('ops'); }   // при синхронизации авто-платежи проводятся ПОСЛЕ пула (см. syncNow), чтобы устройства не задваивали
 catch(err){ console.error('render error', err);
   try{ const o=document.getElementById('screen-ops'); if(o) o.innerHTML='<div class="empty"><div class="big">⚠️</div>Не удалось отобразить данные. Открой «Ещё → Резервные копии», чтобы восстановить последнюю копию, либо «Экспорт», чтобы сохранить файл.</div>'; }catch(e){} }
 ensurePersist(); dailyBackup(); syncOnLoad();
