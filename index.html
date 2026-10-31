@@ -622,6 +622,7 @@ function normalize() {
   state.debtStrategy ||= 'snowball';
   state.debtBudget = state.debtBudget || 0;
   state.overAllocBaseline = state.overAllocBaseline || 0;
+  state.rev = +state.rev || 0;   // ревизия данных (wall-clock) для синхронизации — побеждает более позднее изменение
   // H3: санитайзинг иконок/цветов (импорт/бэкап могут содержать HTML → stored XSS). Всё, что рендерится сырым, чистим здесь.
   const cleanColor=(c,def)=>/^#[0-9a-fA-F]{3,8}$/.test(String(c||''))?c:def;
   const cleanIcon=(s,def)=>{ s=String(s==null?'':s); return (/[<>&"']/.test(s)||s.length>6)?def:(s||def); };
@@ -649,7 +650,7 @@ function migrateCategories() {
   state.categoriesVersion = 3;
 }
 let saveTimer, savePending=false;
-function save() { dataStamp++; savePending=true; clearTimeout(saveTimer); saveTimer = setTimeout(()=>{ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); savePending=false; }catch(e){ toast('Ошибка сохранения'); } maybeAutoBackup(); }, 50); }
+function save() { dataStamp++; state.rev=Date.now(); savePending=true; clearTimeout(saveTimer); saveTimer = setTimeout(()=>{ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); savePending=false; }catch(e){ toast('Ошибка сохранения'); } maybeAutoBackup(); syncPushDebounced(); }, 50); }
 // M7: немедленно дописать отложенное сохранение при закрытии/сворачивании вкладки (иначе дебаунс 50мс теряется).
 function flushSave(){ if(!savePending) return; clearTimeout(saveTimer); try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); savePending=false; }catch(e){} }
 window.addEventListener('pagehide', flushSave);
@@ -1410,6 +1411,7 @@ function renderMore() {
   if (moreView==='debts') return renderDebts(el);
   if (moreView==='recurring') return renderRecurring(el);
   if (moreView==='calendar') return renderPayCalendar(el);
+  if (moreView==='sync') return renderSync(el);
   if (moreView==='goals') return renderGoals(el);
   if (moreView==='deposit') return renderDepositCalc(el);
   if (moreView==='plan') return renderPlan(el);
@@ -1433,6 +1435,7 @@ function renderMore() {
     <div class="menu-item" onclick="openMore('currencies')"><span class="mi">💱</span>Валюты и курсы<span class="ar">›</span></div>
     <div class="menu-item" onclick="openMore('appearance')"><span class="mi">🎨</span>Оформление (тема)<span class="ar">›</span></div>
     <div class="menu-item" onclick="openNotifySettings()"><span class="mi">🔔</span>Напоминания<span class="ar">›</span></div>
+    <div class="menu-item" onclick="openMore('sync')"><span class="mi">☁️</span>Синхронизация (ПК↔телефон)<span class="ar">›</span></div>
     <div class="section-title">Данные</div>
     <button class="btn sec" onclick="openMore('backups')">🗂 Резервные копии</button>
     <button class="btn sec" style="margin-top:10px" onclick="document.getElementById('csvFile').click()">📥 Импорт выписки (CSV)</button>
@@ -2439,6 +2442,88 @@ async function updateRates() {
 }
 
 /* ---------- Экспорт / импорт / сброс ---------- */
+/* ================= Синхронизация через GitHub Gist =================
+   Данные хранятся в приватном Gist пользователя. Токен — только локально (в Gist НЕ уходит).
+   Модель слияния: last-write-wins по state.rev (wall-clock). Перед заменой локальных данных — бэкап. */
+const SYNC_KEY='konverty_sync';         // {token, gistId}
+const SYNC_TS_KEY='konverty_sync_at';   // когда последний раз синхронизировались (для UI)
+const SYNC_FILE='konverty_state.json';
+let _syncTimer=null, _syncing=false;
+function syncCfg(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY)||'null'); }catch(e){ return null; } }
+function syncSetCfg(c){ try{ if(c) localStorage.setItem(SYNC_KEY, JSON.stringify(c)); else localStorage.removeItem(SYNC_KEY); }catch(e){} }
+function syncConfigured(){ const c=syncCfg(); return !!(c && c.token && c.gistId); }
+function syncMarkAt(){ try{ localStorage.setItem(SYNC_TS_KEY, String(Date.now())); }catch(e){} }
+function syncLastAt(){ try{ return +localStorage.getItem(SYNC_TS_KEY)||0; }catch(e){ return 0; } }
+function _gh(path, opts){ opts=opts||{}; const c=syncCfg();
+  const headers=Object.assign({'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}, opts.headers||{});
+  if(c&&c.token) headers['Authorization']='Bearer '+c.token;
+  return fetch('https://api.github.com'+path, Object.assign({}, opts, {headers})); }
+async function syncConnect(token){
+  token=(token||'').trim(); if(!token){ toast('Вставь токен'); return false; }
+  syncSetCfg({token, gistId:null});
+  try{
+    const r=await _gh('/gists?per_page=100'); if(!r.ok) throw new Error('auth');
+    const list=await r.json();
+    let gistId=(list.find(g=>g.files && g.files[SYNC_FILE])||{}).id || null;
+    if(!gistId){
+      const body={description:'Конверты — синхронизация (не редактировать вручную)', public:false, files:{[SYNC_FILE]:{content:JSON.stringify(state)}}};
+      const cr=await _gh('/gists',{method:'POST', body:JSON.stringify(body)}); if(!cr.ok) throw new Error('create'); const g=await cr.json(); gistId=g.id;
+    }
+    syncSetCfg({token, gistId});
+    await syncNow(false);
+    return true;
+  }catch(e){ syncSetCfg(null); toast('Не удалось подключить (проверь токен и право «gist»)'); return false; }
+}
+async function syncPull(){ const c=syncCfg(); if(!c||!c.gistId) return null;
+  const r=await _gh('/gists/'+c.gistId); if(!r.ok) throw new Error('pull'); const g=await r.json();
+  const f=g.files&&g.files[SYNC_FILE]; if(!f) return null;
+  let content=f.content; if(f.truncated && f.raw_url){ const rr=await fetch(f.raw_url); content=await rr.text(); }
+  try{ return JSON.parse(content); }catch(e){ return null; } }
+async function syncPush(){ const c=syncCfg(); if(!c||!c.gistId) return false;
+  const body={files:{[SYNC_FILE]:{content:JSON.stringify(state)}}};
+  const r=await _gh('/gists/'+c.gistId,{method:'PATCH', body:JSON.stringify(body)}); if(!r.ok) throw new Error('push'); return true; }
+async function syncNow(silent){
+  if(!syncConfigured()){ if(!silent) toast('Синхронизация не подключена'); return; }
+  if(_syncing) return; _syncing=true;
+  try{
+    const remote=await syncPull();
+    const localRev=+state.rev||0, remoteRev=remote?(+remote.rev||0):-1;
+    if(remote && remoteRev>localRev){
+      try{ await createBackup('pre-sync'); }catch(e){}
+      state=remote; normalize(); try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} dataStamp++; _balCache=null; render();
+      syncMarkAt(); toast('Загружено с облака ✓');
+    } else if(!remote || localRev>remoteRev){
+      await syncPush(); syncMarkAt(); if(!silent) toast('Выгружено в облако ✓');
+    } else { syncMarkAt(); if(!silent) toast('Уже синхронизировано'); }
+    if(currentTab==='more'&&moreView==='sync') renderMore();
+  }catch(e){ if(!silent) toast('Ошибка синхронизации — проверь сеть и токен'); }
+  finally{ _syncing=false; }
+}
+function syncPushDebounced(){ if(!syncConfigured()) return; clearTimeout(_syncTimer); _syncTimer=setTimeout(()=>{ syncPush().then(syncMarkAt).catch(()=>{}); }, 2500); }
+function syncOnLoad(){ if(syncConfigured()) setTimeout(()=>syncNow(true), 400); }
+function syncDisconnect(){ syncSetCfg(null); try{ localStorage.removeItem(SYNC_TS_KEY); }catch(e){} toast('Синхронизация отключена'); renderMore(); }
+function renderSync(el){
+  const cfg=syncConfigured(); const last=syncLastAt();
+  const lastStr=last?new Date(last).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'ещё не было';
+  el.innerHTML=`<button class="back-btn" onclick="backMore()">‹ Назад</button><h2 style="margin:0 4px 12px">☁️ Синхронизация</h2>
+    ${cfg?`
+      <div class="card tight"><div class="row"><span class="muted">Статус</span><span class="green" style="font-weight:700">подключено</span></div>
+        <div class="row"><span class="muted">Последняя синхронизация</span><span style="font-weight:600">${lastStr}</span></div></div>
+      <button class="btn" onclick="syncNow(false)">🔄 Синхронизировать сейчас</button>
+      <button class="btn sec" style="margin-top:10px" onclick="syncDisconnect()">Отключить на этом устройстве</button>
+      <div class="small-note" style="margin-top:12px">Данные в твоём приватном GitHub Gist. Приложение выгружает изменения само и подтягивает их при запуске. Если менял на двух устройствах офлайн — побеждает более позднее изменение (перед заменой создаётся резервная копия).</div>
+      <div class="small-note" style="margin-top:8px">Второе устройство: открой этот экран там и вставь <b>тот же токен</b> — оно найдёт тот же Gist автоматически.</div>
+    `:`
+      <div class="small-note" style="margin-bottom:12px">Синхронизация ПК↔телефон через твой приватный <b>GitHub Gist</b>. Нужен токен с правом «gist» — он хранится только на этом устройстве и в сам Gist не попадает.</div>
+      <div class="card tight" style="margin-bottom:12px">
+        <div style="font-weight:700;margin-bottom:6px">Как получить токен (~1 минута)</div>
+        <div class="small-note">1. Открой <b>github.com/settings/tokens</b> → Generate new token → <b>Tokens (classic)</b>.<br>2. В Scopes отметь только <b>gist</b>.<br>3. Скопируй токен (вида <code>ghp_…</code>) и вставь ниже.</div></div>
+      <label class="field"><span>Токен GitHub (ghp_…)</span><input class="input" id="sync-token" type="password" placeholder="ghp_..." autocomplete="off"></label>
+      <button class="btn" onclick="syncConnectUI()">Подключить</button>
+      <div class="small-note" style="margin-top:10px">На втором устройстве вставь <b>тот же</b> токен — данные подтянутся сами.</div>
+    `}`;
+}
+function syncConnectUI(){ const t=document.getElementById('sync-token'); if(!t) return; const btn=event&&event.target; if(btn){ btn.disabled=true; btn.textContent='Подключаю…'; } syncConnect(t.value).then(ok=>{ if(ok){ toast('Подключено ✓'); moreView='sync'; renderMore(); } else if(btn){ btn.disabled=false; btn.textContent='Подключить'; } }); }
 function exportData() {
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');
   a.href=url; a.download='konverty-backup-'+todayISO()+'.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('Файл сохранён');
@@ -3088,7 +3173,7 @@ let autoN=0;
 try { autoN=autoPostDueRecurring(); switchTab('ops'); }
 catch(err){ console.error('render error', err);
   try{ const o=document.getElementById('screen-ops'); if(o) o.innerHTML='<div class="empty"><div class="big">⚠️</div>Не удалось отобразить данные. Открой «Ещё → Резервные копии», чтобы восстановить последнюю копию, либо «Экспорт», чтобы сохранить файл.</div>'; }catch(e){} }
-ensurePersist(); dailyBackup();
+ensurePersist(); dailyBackup(); syncOnLoad();
 if (autoN) setTimeout(()=>toast(`Автоматически проведено: ${autoN}`), 1100);
 // Онбординг только для новой установки; существующему пользователю тихо ставим флаг.
 try{ if(!localStorage.getItem(ONB_KEY)){ if(state.transactions.length===0) setTimeout(showOnboarding, 950); else localStorage.setItem(ONB_KEY,'1'); } }catch(e){}
