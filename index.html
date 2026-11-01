@@ -469,6 +469,11 @@
     main { max-width:var(--content-max); padding:18px 24px 44px; margin:0 auto; }
     .sheet { left:var(--sbw); max-width:560px; border-radius:var(--r-xl); }
     .cf-back { left:var(--sbw); }
+    /* Счета — две колонки: слева сводка, справа счета/конверты */
+    .acc-cols { display:grid; grid-template-columns:360px 1fr; gap:20px; align-items:start; }
+    /* Анализ — карточки в две колонки (masonry) */
+    .ana-cols { column-count:2; column-gap:18px; }
+    .ana-cols > * { break-inside:avoid; }
   }
 
   /* ===== Главная (дашборд) ===== */
@@ -787,7 +792,7 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='0.4.0';   // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
+const APP_VERSION='0.4.1';   // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
 const BUILD='2026-11-01';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
   try { const raw = localStorage.getItem(LS_KEY); if (raw) { state = JSON.parse(raw); normalize(); return; } } catch(e){ console.warn(e); }
@@ -815,7 +820,7 @@ function normalize() {
   const cleanColor=(c,def)=>/^#[0-9a-fA-F]{3,8}$/.test(String(c||''))?c:def;
   const cleanIcon=(s,def)=>{ s=String(s==null?'':s); return (/[<>&"']/.test(s)||s.length>6)?def:(s||def); };
   state.accounts.forEach(a => { a.archived=!!a.archived; a.investment=!!a.investment; a.excluded=!!a.excluded; a.offTopPercent=Math.max(0,Math.min(100,a.offTopPercent||0)); a.deposit=!!a.deposit; a.rate=Math.max(0,Math.min(1000,+a.rate||0)); a.currency = a.currency || state.baseCurrency; a.color=cleanColor(a.color,'#5b8def'); a.icon=cleanIcon(a.icon,'💳'); a.group=String(a.group||'').slice(0,40); });
-  state.envelopes.forEach(e => { e.archived=!!e.archived; e.noOwe=!!e.noOwe; delete e.offTop; e.color=cleanColor(e.color,'#5b8def'); e.monthlyTarget=Math.max(0, round2(e.monthlyTarget||0)); e.monthlyLimit=Math.max(0, round2(e.monthlyLimit||0)); });
+  state.envelopes.forEach(e => { e.archived=!!e.archived; e.noOwe=!!e.noOwe; delete e.offTop; e.color=cleanColor(e.color,'#5b8def'); e.monthlyTarget=Math.max(0, round2(e.monthlyTarget||0)); e.monthlyLimit=Math.max(0, round2(e.monthlyLimit||0)); e.icon=e.icon||'✉️'; });
   state.categories.forEach(c => { if (c.kind==='expense') c.limit = c.limit||0; c.fav = !!c.fav; c.color=cleanColor(c.color,'#94a3b8'); c.icon=cleanIcon(c.icon,'🏷️'); });
   // P8: разовая миграция старых «лимитов категорий» в единый инструмент «Лимиты и наблюдение».
   state.categories.forEach(c => { if(c.kind==='expense' && c.limit>0){ if(!state.watchlists.some(w=>w.type==='category'&&w.value===c.id)) state.watchlists.push({id:uid(),type:'category',value:c.id,target:round2(c.limit)}); c.limit=0; } });
@@ -1103,8 +1108,8 @@ function render() {
   document.getElementById('monthNav').style.display = 'none';
   const hsum = document.getElementById('hsum');
   if (showMonth) {
-    // На «Операциях» в режиме «Всё время» показываем суммы за всё время, иначе — за месяц.
-    const allTime = currentTab==='ops' && opsScope==='all';
+    // В режиме «Всё время» (у Операций и Анализа — свои переключатели) суммы за всё время, иначе за месяц.
+    const allTime = (currentTab==='ops' && opsScope==='all') || (currentTab==='analysis' && analysisScope==='all');
     const src = allTime ? state.transactions : monthTx();
     const inc=src.filter(t=>t.type==='income').reduce((s,t)=>s+toBase(t.amount,t.currency),0);
     const exp=src.filter(t=>t.type==='expense').reduce((s,t)=>s+toBase(t.amount,t.currency),0);
@@ -1199,14 +1204,15 @@ function renderHome(){
       ? `<div class="prog he-bar"><i style="width:${Math.max(2,pc)}%;background:${barCol}"></i></div><div class="he-pct">${right}</div>`
       : '';
     return `<div class="he-row" onclick="openEnvManage('${e.id}')">
-      <div class="he-ic" style="background:${e.color}">✉️</div>
+      <div class="he-ic" style="background:${e.color}">${e.icon||'✉️'}</div>
       <div class="he-main"><div class="he-name">${esc(e.name)}</div><div class="he-sub">${line}</div></div>
       ${rightBlock}<div class="he-chev">›</div></div>`; }).join('')
     || `<div class="empty" style="padding:22px">Нет конвертов</div>`;
   const envSection=`<div class="home-sec"><h3>Конверты</h3><a onclick="switchTab('accounts')">Все конверты ›</a></div>${envRows}`;
 
-  // Ближайшие платежи + Цели
-  const pays=payAgendaItems().filter(i=>i.date>=todayStr).slice(0,3);
+  // Ближайшие платежи: окно ровно на месяц вперёд от сегодня (напр. 16.11 → до 16.12)
+  const payCut=(()=>{ let [y,m,d]=todayStr.split('-').map(Number); m+=1; if(m>12){m-=12;y++;} const dim=new Date(y,m,0).getDate(); d=Math.min(d,dim); return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; })();
+  const pays=payAgendaItems().filter(i=>i.date>=todayStr && i.date<=payCut).slice(0,5);
   const payItems = pays.length ? pays.map(i=>{ const cls=i.type==='income'?'green':'red'; const sign=i.type==='income'?'+':'−';
     return `<div class="duo-item"><div class="duo-dic">${i.kind==='debt'?'🤝':(i.type==='income'?'↓':'↑')}</div>
       <div class="grow" style="min-width:0"><div class="duo-t">${esc(i.title)}</div><div class="he-sub">${dayHead(i.date)}</div></div>
@@ -1282,16 +1288,19 @@ function opRow(t) {
 let opsQuery='', opsType='all', opsScope='month';
 function opsSetType(v){ opsType=v; renderOps(); }
 function opsToggleScope(){ opsScope = opsScope==='month'?'all':'month'; render(); }   // render() обновит и баннер-суммы, и список
-// Полоса выбора периода (переехала из баннера). withAll=true — добавляет переключатель «Всё время» (для Операций).
-function periodBar(withAll){
-  const all = withAll && opsScope==='all';
+// Полоса выбора периода (переехала из баннера). mode: 'ops' | 'analysis' | 'none'.
+// Для 'ops' и 'analysis' добавляет СВОЙ (независимый) переключатель «Всё время».
+function periodBar(mode){
+  const scope = mode==='ops'?opsScope : mode==='analysis'?analysisScope : 'month';
+  const all = scope==='all';
+  const toggleFn = mode==='ops'?'opsToggleScope()' : mode==='analysis'?'setAnalysisScope()' : '';
   return `<div class="period-bar">
     <div class="per-nav">
       <button onclick="shiftMonth(-1)" ${all?'disabled':''} aria-label="Предыдущий месяц">‹</button>
       <span>${all?'Всё время':monthLabel(viewMonth)}</span>
       <button onclick="shiftMonth(1)" ${all?'disabled':''} aria-label="Следующий месяц">›</button>
     </div>
-    ${withAll?`<button class="per-all ${all?'active':''}" onclick="opsToggleScope()">${all?'✓ Всё время':'Всё время'}</button>`:''}
+    ${toggleFn?`<button class="per-all ${all?'active':''}" onclick="${toggleFn}">${all?'✓ Всё время':'Всё время'}</button>`:''}
   </div>`;
 }
 function renderOps() {
@@ -1311,7 +1320,7 @@ function renderOps() {
     <div class="chips" style="margin-top:8px">${typeChips}</div></div>`;
   const st=(viewMonth===ymNow)?computeStreak():{cur:0,best:0};
   const streakChip = st.cur>=2 ? `<div class="streak-chip">🔥 <b>${st.cur}</b> ${plural(st.cur,'день','дня','дней')} подряд с записями${st.best>st.cur?` · рекорд ${st.best}`:(st.cur>=7?' · так держать!':'')}</div>` : '';
-  el.innerHTML = periodBar(true) + streakChip + dueBanner + filterBar + `<div id="opsList"></div>`;
+  el.innerHTML = periodBar('ops') + streakChip + dueBanner + filterBar + `<div id="opsList"></div>`;
   renderOpsList();
 }
 // Множественное число (рус.): plural(5,'день','дня','дней') → 'дней'
@@ -1352,7 +1361,8 @@ function renderOpsList(){
 }
 
 /* ---------- Анализ ---------- */
-let analysisKind='expense', analysisSort='amount';
+let analysisKind='expense', analysisSort='amount', analysisScope='month';   // analysisScope НЕ связан с opsScope (отдельные переключатели «Всё время»)
+function setAnalysisScope(){ analysisScope = analysisScope==='month'?'all':'month'; render(); }   // render() обновит и баннер-суммы Анализа
 function lastMonths(n){ const arr=[]; let [y,m]=viewMonth.split('-').map(Number); for(let i=0;i<n;i++){ arr.unshift(`${y}-${String(m).padStart(2,'0')}`); m--; if(m<1){m=12;y--;} } return arr; }
 function monthlyTotals(ym){ const mt=state.transactions.filter(t=>t.date.slice(0,7)===ym);
   return { inc:mt.filter(t=>t.type==='income').reduce((s,t)=>s+toBaseAt(t.amount,t.currency,t.date),0),
@@ -1433,6 +1443,8 @@ function insightsCard(){
 }
 function renderAnalysis() {
   const el=document.getElementById('screen-analysis');
+  const anaAll = analysisScope==='all';                       // «Всё время» (независимо от Операций)
+  const anaBase = anaAll ? state.transactions : monthTx();    // набор операций для категорий/дней/топа
   const data=lastMonths(6).map(ym=>({ym,...monthlyTotals(ym)}));
   const max=Math.max(1,...data.flatMap(d=>[d.inc,d.exp]));
   const bars=data.map(d=>{ const m=+d.ym.split('-')[1];
@@ -1448,7 +1460,7 @@ function renderAnalysis() {
   const projExp=(isCur&&days>0)?round2(exp/days*dim):exp; const projLeft=round2(inc-projExp);
   const forecast = isCur ? `<div class="row"><span class="muted">Прогноз расходов к концу месяца</span><span style="font-weight:800">${fmtBase(projExp)}</span></div>
     <div class="row"><span class="muted">Останется при таком темпе</span><span class="${projLeft>=0?'green':'red'}" style="font-weight:800">${projLeft>=0?'+':''}${fmtBase(projLeft)}</span></div>` : '';
-  const summary=`<div class="card tight">
+  const summary=anaAll?'':`<div class="card tight">
     <div class="row"><span class="muted">Остаток за месяц (доход − расход)</span><span style="font-weight:800" class="${diff>=0?'green':'red'}">${diff>=0?'+':''}${fmtBase(diff)}</span></div>
     <div class="row"><span class="muted">Средний расход в день</span><span style="font-weight:800">${fmtBase(exp/Math.max(1,days))}</span></div>${forecast}</div>`;
   // Сравнение с предыдущим месяцем
@@ -1456,11 +1468,11 @@ function renderAnalysis() {
   const delta=(cur,prev,goodUp)=>{ if(prev<=0.005) return cur>0.005?'<span class="green">новое</span>':'—';
     const d=round2((cur-prev)/prev*100), up=d>=0, good=up===goodUp;
     return `<span class="${good?'green':'red'}">${up?'▲':'▼'} ${Math.abs(d).toFixed(0)}%</span>`; };
-  const comparison=(pv.inc>0.005||pv.exp>0.005)?`<div class="card tight"><div class="section-title" style="margin:2px 0 8px">Сравнение с ${monthLabel(prevYm)}</div>
+  const comparison=(!anaAll&&(pv.inc>0.005||pv.exp>0.005))?`<div class="card tight"><div class="section-title" style="margin:2px 0 8px">Сравнение с ${monthLabel(prevYm)}</div>
     <div class="row"><span class="muted">Доходы</span><span style="font-weight:700">${fmtBase(inc)} · ${delta(inc,pv.inc,true)}</span></div>
     <div class="row"><span class="muted">Расходы</span><span style="font-weight:700">${fmtBase(exp)} · ${delta(exp,pv.exp,false)}</span></div></div>`:'';
   // Лимиты по категориям (только в режиме расходов)
-  const budgets=(()=>{ if(analysisKind!=='expense')return'';
+  const budgets=(()=>{ if(anaAll||analysisKind!=='expense')return'';
     // P8: лимиты категорий берём из единого инструмента «Лимиты и наблюдение» (watchlists типа category).
     const lim=state.watchlists.filter(w=>w.type==='category'&&w.target>0).map(w=>({c:catById(w.value),limit:round2(w.target)})).filter(x=>x.c); if(!lim.length)return'';
     const spent={}; monthTx().filter(t=>t.type==='expense').forEach(t=>{ for(const p of txParts(t)){ spent[p.categoryId]=round2((spent[p.categoryId]||0)+toBaseAt(p.amount,t.currency,t.date)); } });
@@ -1474,7 +1486,7 @@ function renderAnalysis() {
     return `<div class="card"><div class="section-title" style="margin:0 0 4px">Лимиты по категориям</div>${rows}
       <div class="small-note" style="margin-top:4px">Справа — остаток лимита; красное со знаком «−» — перерасход.</div></div>`; })();
   const extra=comparison+budgets;
-  const mt=monthTx().filter(t=>t.type===analysisKind);
+  const mt=anaBase.filter(t=>t.type===analysisKind);
   const agg={}; for (const t of mt){ for(const p of txParts(t)){ const k=p.categoryId||'_none'; (agg[k] ||= {value:0,count:0}); agg[k].value=round2(agg[k].value+toBaseAt(p.amount,t.currency,t.date)); agg[k].count++; } }
   const entries=Object.entries(agg).filter(([,v])=>v.value>0.005).map(([id,v])=>{ const c=id==='_none'?null:catById(id);
     return {id, name:c?c.name:'Без категории', icon:c?c.icon:'❓', color:c?c.color:'#94a3b8', value:v.value, count:v.count}; })
@@ -1483,7 +1495,7 @@ function renderAnalysis() {
   const seg=`<div class="seg" style="margin-bottom:12px">
     <button class="${analysisKind==='expense'?'active':''}" onclick="setAnalysisKind('expense')">Расходы</button>
     <button class="${analysisKind==='income'?'active':''}" onclick="setAnalysisKind('income')">Доходы</button></div>`;
-  const nwCard=netWorthCard(); const insCard=insightsCard();
+  const nwCard=netWorthCard(); const insCard=anaAll?'':insightsCard();
   // Этап 3: денежный поток за 12 месяцев (доход/расход/чистый поток/норма сбережений)
   const cashflowCard=(()=>{ const m12=lastMonths(12).map(ym=>monthlyTotals(ym)); const yInc=round2(m12.reduce((s,x)=>s+x.inc,0)), yExp=round2(m12.reduce((s,x)=>s+x.exp,0)), yNet=round2(yInc-yExp); if(yInc<=0&&yExp<=0) return ''; const rate=yInc>0?Math.round(yNet/yInc*100):0;
     return `<div class="card"><div class="section-title" style="margin:0 0 6px">Денежный поток · 12 мес</div>
@@ -1491,7 +1503,7 @@ function renderAnalysis() {
       <div class="row"><span class="muted">Расходы</span><span style="font-weight:800">${fmtBase(yExp)}</span></div>
       <div class="row"><span class="muted">Чистый поток</span><span class="${yNet>=0?'green':'red'}" style="font-weight:800">${yNet>=0?'+':'−'}${fmtBase(Math.abs(yNet))}</span></div>
       ${yInc>0?`<div class="row"><span class="muted">Норма сбережений</span><span class="${rate>=0?'green':'red'}" style="font-weight:800">${rate}%</span></div>`:''}</div>`; })();
-  if (!entries.length){ el.innerHTML=periodBar(false)+seg+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="empty"><div class="big">📊</div>Нет ${analysisKind==='expense'?'расходов':'доходов'} за ${monthLabel(viewMonth)}</div>`; return; }
+  if (!entries.length){ el.innerHTML=periodBar('analysis')+seg+`<div class="ana-cols">`+insCard+chart+nwCard+cashflowCard+summary+extra+`</div><div class="empty"><div class="big">📊</div>Нет ${analysisKind==='expense'?'расходов':'доходов'} ${anaAll?'за всё время':'за '+monthLabel(viewMonth)}</div>`; return; }
   const lines=entries.map(e=>{ const pct=total>0?Math.round(e.value/total*100):0;
     return `<div class="cat-line" style="cursor:pointer" onclick="openCatOps('${e.id}')"><div class="ci" style="background:${e.color}">${e.icon}</div>
       <div class="cinfo"><div class="cname"><span>${esc(e.name)} ›</span><span>${fmtBase(e.value)}</span></div>
@@ -1508,7 +1520,7 @@ function renderAnalysis() {
   // Топ-5 крупных
   const top=mt.slice().sort((a,b)=>toBaseAt(b.amount,b.currency,b.date)-toBaseAt(a.amount,a.currency,a.date)).slice(0,5);
   const top5Card=`<div class="card"><div class="section-title" style="margin:0 0 4px">Топ-5 крупных ${analysisKind==='income'?'поступлений':'трат'}</div>${top.map(opRow).join('')}</div>`;
-  el.innerHTML = periodBar(false)+seg+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="card"><div class="donut-wrap">${donutSVG(entries,total)}</div></div><div class="card">${sortToggle}${lines}</div>`+weekdayCard+top5Card;
+  el.innerHTML = periodBar('analysis')+seg+`<div class="ana-cols">`+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="card"><div class="donut-wrap">${donutSVG(entries,total)}</div></div><div class="card">${sortToggle}${lines}</div>`+weekdayCard+top5Card+`</div>`;
 }
 function openCatOps(catId){
   const kind=analysisKind;
@@ -1628,7 +1640,7 @@ function renderAccounts() {
     const spentHtml = e.monthlyLimit>0 ? (()=>{ const sp=envSpentInMonth(e.id, todayISO().slice(0,7)); const pc=Math.min(100,Math.round(sp/e.monthlyLimit*100)); const over=sp>e.monthlyLimit+0.005; const col=over?'var(--red)':pc>=80?'var(--warn-txt)':'var(--muted)';
       return `<div class="pct" style="color:${col}">🧾 ${fmtBase(sp)} / ${fmtBase(e.monthlyLimit)}${over?' · перерасход':''}</div>
         <div class="prog" style="margin-top:4px;height:4px;max-width:170px"><i style="width:${Math.max(2,pc)}%;background:${col}"></i></div>`; })() : '';
-    return `<div class="env" data-id="${e.id}" onclick="openEnvManage('${e.id}')" style="cursor:pointer"><div class="dot" style="background:${e.color}"></div>
+    return `<div class="env" data-id="${e.id}" onclick="openEnvManage('${e.id}')" style="cursor:pointer"><div class="cat-ic" style="background:${e.color};font-size:19px">${e.icon||'✉️'}</div>
       <div class="info"><div class="name">${esc(e.name)}</div><div class="pct">${e.percent}% от распределяемого</div>${oweBadge}${tgtHtml}${spentHtml}</div>
       <div class="bal ${base<-0.005?'red':''}">${main}${sub}</div></div>`;
   }).join('')||`<div class="empty">Нет конвертов</div>`;
@@ -1662,17 +1674,23 @@ function renderAccounts() {
     <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:700">${fmtBase(committed)} ${envCollapsed?'▾':'▴'}</span></div>`;
   el.innerHTML = `
     <div class="scr-title">Счета</div>
-    <div class="card total-card"><div class="l">Всего денег (в ${state.baseCurrency})</div>
-      <div class="a">${fmtBase(net)}</div><div class="cur">${curB}</div></div>
-    ${breakdown}
-    <div class="btn-grid"><button class="btn" onclick="openEntry('income')">＋ Доход</button>
-      <button class="btn sec" onclick="openEntry('transfer')">🔁 Перевод</button></div>
-    ${accHtml}
-    ${envHeader}${noticeLine}${envCollapsed?'':envHtml}
-    ${goalsSummaryHtml()}
-    ${(iowe>0||owed>0)?`<div class="section-title">Долги</div><div class="card tight">
-      <div class="row"><span class="muted">Я должен</span><span class="red">${fmtBase(iowe)}</span></div>
-      <div class="row"><span class="muted">Мне должны</span><span class="green">${fmtBase(owed)}</span></div></div>`:''}
+    <div class="acc-cols">
+      <div class="acc-col">
+        <div class="card total-card"><div class="l">Всего денег (в ${state.baseCurrency})</div>
+          <div class="a">${fmtBase(net)}</div><div class="cur">${curB}</div></div>
+        ${breakdown}
+        <div class="btn-grid"><button class="btn" onclick="openEntry('income')">＋ Доход</button>
+          <button class="btn sec" onclick="openEntry('transfer')">🔁 Перевод</button></div>
+      </div>
+      <div class="acc-col">
+        ${accHtml}
+        ${envHeader}${noticeLine}${envCollapsed?'':envHtml}
+        ${goalsSummaryHtml()}
+        ${(iowe>0||owed>0)?`<div class="section-title">Долги</div><div class="card tight">
+          <div class="row"><span class="muted">Я должен</span><span class="red">${fmtBase(iowe)}</span></div>
+          <div class="row"><span class="muted">Мне должны</span><span class="green">${fmtBase(owed)}</span></div></div>`:''}
+      </div>
+    </div>
   `;
 }
 // P7: свернуть/развернуть список конвертов на экране «Счета» (пожелание сохраняется на устройстве).
@@ -1793,7 +1811,7 @@ function renderManageAccounts(el) {
 function renderManageEnvelopes(el) {
   const sum=activeEnvelopes().reduce((s,e)=>s+(e.percent||0),0);
   const items = state.envelopes.map(e=>`
-    <div class="list-item"><div class="dot" style="width:14px;height:14px;border-radius:50%;background:${e.color};flex:0 0 auto"></div>
+    <div class="list-item"><div class="cat-ic" style="width:38px;height:38px;font-size:17px;background:${e.color};flex:0 0 auto">${e.icon||'✉️'}</div>
       <div class="grow"><div style="font-weight:600">${esc(e.name)} ${e.archived?'<span class="badge">архив</span>':''}</div>
         <div class="small-note">${e.percent}% от распределяемого</div></div>
       <button class="icon-btn" onclick="openEnvelope('${e.id}')">✏️</button>
@@ -2600,6 +2618,7 @@ async function deleteDebt(id){ if(!await confirmSheet('Удалить долг?'
 
 /* ---------- Счета (формы) ---------- */
 const PALETTE=['#5b8def','#3bb8ab','#7b5cff','#29b083','#ef5f68','#f0b429','#06b6d4','#ec4899','#84cc16','#f97316','#8b5cf6','#64748b','#e0a80b'];
+const ENV_EMOJI=['✉️','🛒','🍽️','🏠','🚌','🚗','📱','💡','👕','💊','🎬','✈️','💻','📚','🧸','🏋️','🐾','🎁','💰','🏦','🎯','🧾','☕','⛽','🎓','🩺','🎮','💳','🛋️','🔄','💸','🏖️'];
 const ACC_EMOJI=['💳','💵','🏦','🟡','📈','💰','🪙','💼','🏧','📱','💴','💶','💷','🐖'];
 function openAccount(id) {
   const a=id?acc(id):null; const color=a?a.color:PALETTE[state.accounts.length%PALETTE.length]; const icon=a?a.icon:'💳';
@@ -2659,9 +2678,11 @@ async function deleteAccount(id) {
 
 /* ---------- Конверты (формы) ---------- */
 function openEnvelope(id) {
-  const e=id?env(id):null; const color=e?e.color:PALETTE[state.envelopes.length%PALETTE.length];
+  const e=id?env(id):null; const color=e?e.color:PALETTE[state.envelopes.length%PALETTE.length]; const icon=e?(e.icon||'✉️'):'✉️';
   openSheet(`<h2>${e?'Изменить конверт':'Новый конверт'}</h2>
     <label class="field"><span>Название</span><input class="input" id="env-name" value="${e?esc(e.name):''}" placeholder="Продукты"></label>
+    <label class="field"><span>Иконка</span><div class="chips" id="env-emojis">${ENV_EMOJI.map(em=>`<div onclick="pickIcon('env-icon','env-emojis','${em}')" data-e="${em}" style="width:var(--tap);height:var(--tap);display:grid;place-items:center;font-size:22px;border-radius:var(--r-sm);border:2px solid ${em===icon?'var(--accent)':'transparent'};background:var(--card2)">${em}</div>`).join('')}</div>
+      <input type="hidden" id="env-icon" value="${icon}"></label>
     <label class="field"><span>Процент (от распределяемого дохода)</span><input class="input" id="env-pct" type="number" inputmode="decimal" value="${e?e.percent:10}"></label>
     <label class="field"><span>Цель пополнения в месяц, ${state.baseCurrency} (необязательно)</span><input class="input" id="env-target" type="number" inputmode="decimal" value="${e&&e.monthlyTarget?e.monthlyTarget:''}" placeholder="0 — без цели"></label>
     <div class="small-note" style="margin:-6px 2px 10px">Информационная цель: сколько хочешь класть в конверт за месяц. Пополнения по % и вручную засчитываются в прогресс. На автосписание по % не влияет.</div>
@@ -2679,11 +2700,12 @@ function openEnvelope(id) {
 function saveEnvelope(id) {
   const name=document.getElementById('env-name').value.trim(), pct=parseFloat(document.getElementById('env-pct').value)||0, color=document.getElementById('env-color').value;
   const noOwe=document.getElementById('env-noowe').checked;
+  const icon=document.getElementById('env-icon').value||'✉️';
   const monthlyTarget=Math.max(0, round2(parseFloat(document.getElementById('env-target').value)||0));
   const monthlyLimit=Math.max(0, round2(parseFloat(document.getElementById('env-limit').value)||0));
   if(!name){ toast('Введи название'); return; }
-  if(id){ const e=env(id); e.name=name; e.percent=pct; e.color=color; e.noOwe=noOwe; e.monthlyTarget=monthlyTarget; e.monthlyLimit=monthlyLimit; const ar=document.getElementById('env-arch'); if(ar)e.archived=ar.checked; }
-  else state.envelopes.push({id:uid(),name,percent:pct,color,noOwe,monthlyTarget,monthlyLimit,archived:false});
+  if(id){ const e=env(id); e.name=name; e.percent=pct; e.color=color; e.icon=icon; e.noOwe=noOwe; e.monthlyTarget=monthlyTarget; e.monthlyLimit=monthlyLimit; const ar=document.getElementById('env-arch'); if(ar)e.archived=ar.checked; }
+  else state.envelopes.push({id:uid(),name,percent:pct,color,icon,noOwe,monthlyTarget,monthlyLimit,archived:false});
   save(); closeSheet(); toast('Сохранено'); renderMore();
 }
 async function deleteEnvelope(id) {
