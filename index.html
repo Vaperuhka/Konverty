@@ -60,6 +60,8 @@
     --sp-1: 6px; --sp-2: 10px; --sp-3: 14px; --sp-4: 18px; --sp-5: 24px;
     --tap: 44px; --ease: .18s cubic-bezier(.2,.7,.3,1);
     --radius: 18px;
+    --sbw: 256px;              /* ширина боковой навигации на ПК */
+    --content-max: 900px;      /* макс. ширина контента на ПК */
     --safe-b: env(safe-area-inset-bottom, 0px);
     --safe-t: env(safe-area-inset-top, 0px);
   }
@@ -425,6 +427,37 @@
     box-shadow:0 8px 20px var(--accent-glow-strong); }
   .addbtn:active { transform:scale(.94); }
 
+  /* ===== Боковая навигация (только ПК) ===== */
+  .sidenav { display:none; }
+  .sidenav .sn-brand { display:flex; align-items:center; gap:11px; padding:2px 10px 20px; font-weight:800; font-size:18px; letter-spacing:.2px; }
+  .sidenav .sn-logo { width:38px; height:38px; border-radius:11px; display:grid; place-items:center; font-size:19px; color:#fff;
+    background:linear-gradient(135deg,var(--grad1),var(--grad2)); box-shadow:0 6px 16px var(--header-shadow); flex:0 0 auto; }
+  .sidenav .snav { display:flex; align-items:center; gap:13px; width:100%; text-align:left; padding:11px 14px; border-radius:var(--r-md);
+    color:var(--muted); font-weight:600; font-size:14.5px; min-height:46px; }
+  .sidenav .snav .si { font-size:19px; width:24px; text-align:center; flex:0 0 auto; }
+  .sidenav .snav.active { background:var(--accent-soft); color:var(--accent-d); font-weight:700; }
+  .sidenav .sn-sp { flex:1 1 auto; min-height:8px; }
+  .sidenav .sn-add { display:flex; align-items:center; justify-content:center; gap:9px; margin-top:12px; width:100%;
+    background:linear-gradient(135deg,var(--grad1),var(--accent-d)); color:#fff; font-weight:700; font-size:15px;
+    border-radius:var(--r-md); padding:14px; min-height:var(--tap); box-shadow:0 8px 20px var(--accent-glow-strong); }
+  .sidenav .sn-add:active { transform:scale(.98); }
+  .sidenav .sn-ver { text-align:center; color:var(--muted); font-size:11px; opacity:.7; padding-top:14px; }
+  @media (hover:hover){ .sidenav .snav:not(.active):hover { background:var(--card2); color:var(--txt); } .sidenav .sn-add:hover { filter:brightness(1.05); } }
+
+  /* ===== Десктопная раскладка: сайдбар + широкий контент, нижний таб-бар скрыт ===== */
+  @media (min-width:980px) {
+    nav.tabbar { display:none !important; }
+    .sidenav { display:flex; flex-direction:column; gap:3px; position:fixed; top:0; left:0; bottom:0; width:var(--sbw);
+      background:var(--card); border-right:1px solid var(--line); padding:22px 14px calc(18px + var(--safe-b)); z-index:30; overflow-y:auto; }
+    body { padding-bottom:28px; padding-left:var(--sbw); }
+    header { border-radius:0 0 var(--r-lg) var(--r-lg); padding-left:0; padding-right:0; }
+    header .h-top, header .h-sum, header .h-free { max-width:var(--content-max); margin-left:auto; margin-right:auto;
+      padding-left:28px; padding-right:28px; }
+    main { max-width:var(--content-max); padding:22px 28px 44px; }
+    .sheet { left:var(--sbw); max-width:560px; border-radius:var(--r-xl); }
+    .cf-back { left:var(--sbw); }
+  }
+
   .backdrop { position:fixed; inset:0; background:rgba(30,35,50,.38); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s; }
   .backdrop.show { opacity:1; pointer-events:auto; }
   .cf-back { position:fixed; inset:0; z-index:60; background:rgba(30,35,50,.45); display:flex; align-items:center; justify-content:center; padding:24px; animation:fade .15s ease; }
@@ -561,6 +594,17 @@
   <div class="sp-name">Конверты</div>
   <div class="sp-sub">учёт денег</div>
 </div>
+
+<aside class="sidenav" id="sidenav">
+  <div class="sn-brand"><span class="sn-logo">✉️</span><span>Конверты</span></div>
+  <button class="snav active" data-tab="ops"><span class="si">📝</span>Операции</button>
+  <button class="snav" data-tab="analysis"><span class="si">📊</span>Анализ</button>
+  <button class="snav" data-tab="accounts"><span class="si">👛</span>Счета</button>
+  <button class="snav" data-tab="more"><span class="si">☰</span>Ещё</button>
+  <button class="sn-add" id="addbtnDesk"><span style="font-size:18px">＋</span>Добавить</button>
+  <div class="sn-sp"></div>
+  <div class="sn-ver" id="snVer"></div>
+</aside>
 
 <header>
   <div class="h-top">
@@ -954,8 +998,12 @@ function switchTab(tab){ if(moreView){ moreView=null; navConsume(); } currentTab
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-'+tab).classList.add('active');
   document.querySelectorAll('nav.tabbar button.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.sidenav .snav').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   render(); window.scrollTo(0,0); }
 document.querySelectorAll('nav.tabbar button.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+document.querySelectorAll('.sidenav .snav').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+{ const _ad=document.getElementById('addbtnDesk'); if(_ad) _ad.addEventListener('click',()=>{ haptic(); openEntry('expense'); }); }
+{ const _sv=document.getElementById('snVer'); if(_sv) _sv.textContent='v'+APP_VERSION; }
 
 /* =================================================================
    Рендер
