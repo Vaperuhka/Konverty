@@ -792,7 +792,7 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='0.4.1';   // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
+const APP_VERSION='0.4.3';   // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
 const BUILD='2026-11-01';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
   try { const raw = localStorage.getItem(LS_KEY); if (raw) { state = JSON.parse(raw); normalize(); return; } } catch(e){ console.warn(e); }
@@ -1417,8 +1417,9 @@ function insightsCard(){
   const ym=viewMonth, isCur=ym===todayISO().slice(0,7); const out=[];
   const mtExp=state.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===ym);
   const curExp=mtExp.reduce((s,t)=>s+toBase(t.amount,t.currency),0);
-  // Темп расходов относительно прошлого месяца (только для текущего месяца)
-  if(isCur){ const dim=daysInMonth(ym), day=new Date().getDate(); const proj=day>0?round2(curExp/day*dim):curExp; const prev=monthlyTotals(lastMonths(2)[0]).exp;
+  // Темп расходов относительно прошлого месяца (только для текущего месяца; не раньше 7-го дня и при ≥3 тратах,
+  // иначе экстраполяция по 1–2 дням даёт абсурдные суммы)
+  if(isCur && new Date().getDate()>=7 && mtExp.length>=3){ const dim=daysInMonth(ym), day=new Date().getDate(); const proj=day>0?round2(curExp/day*dim):curExp; const prev=monthlyTotals(lastMonths(2)[0]).exp;
     if(prev>0.5 && proj>prev*1.15) out.push({ic:'⚡',tone:'red',text:`При текущем темпе расходы за месяц ≈ ${fmtBase(proj)} — примерно на ${Math.round((proj/prev-1)*100)}% больше прошлого месяца.`});
     else if(prev>0.5 && proj<prev*0.85 && curExp>0.5) out.push({ic:'👍',tone:'green',text:`Идёшь экономнее: прогноз расходов ≈ ${fmtBase(proj)}, около ${Math.round((1-proj/prev)*100)}% ниже прошлого месяца.`});
   }
@@ -1458,7 +1459,7 @@ function renderAnalysis() {
   const {inc,exp}=monthlyTotals(viewMonth); const diff=round2(inc-exp);
   const isCur=viewMonth===todayISO().slice(0,7); const dim=daysInMonth(viewMonth); const days=isCur?new Date().getDate():dim;
   const projExp=(isCur&&days>0)?round2(exp/days*dim):exp; const projLeft=round2(inc-projExp);
-  const forecast = isCur ? `<div class="row"><span class="muted">Прогноз расходов к концу месяца</span><span style="font-weight:800">${fmtBase(projExp)}</span></div>
+  const forecast = (isCur && days>=7) ? `<div class="row"><span class="muted">Прогноз расходов к концу месяца</span><span style="font-weight:800">${fmtBase(projExp)}</span></div>
     <div class="row"><span class="muted">Останется при таком темпе</span><span class="${projLeft>=0?'green':'red'}" style="font-weight:800">${projLeft>=0?'+':''}${fmtBase(projLeft)}</span></div>` : '';
   const summary=anaAll?'':`<div class="card tight">
     <div class="row"><span class="muted">Остаток за месяц (доход − расход)</span><span style="font-weight:800" class="${diff>=0?'green':'red'}">${diff>=0?'+':''}${fmtBase(diff)}</span></div>
@@ -1524,12 +1525,14 @@ function renderAnalysis() {
 }
 function openCatOps(catId){
   const kind=analysisKind;
+  const allT=analysisScope==='all';   // уважаем переключатель «Всё время» в Анализе
   const matchPart=p=>(catId==='_none'?!p.categoryId:p.categoryId===catId);
-  const list=monthTx().filter(t=>t.type===kind && txParts(t).some(matchPart)).sort(byDateDesc);
+  const src=allT?state.transactions:monthTx();
+  const list=src.filter(t=>t.type===kind && txParts(t).some(matchPart)).sort(byDateDesc);
   const c=catId==='_none'?null:catById(catId);
   const total=list.reduce((s,t)=>s+txParts(t).filter(matchPart).reduce((ss,p)=>ss+toBaseAt(p.amount,t.currency,t.date),0),0);
   openSheet(`<h2>${c?c.icon+' '+esc(c.name):'❓ Без категории'}</h2>
-    <div class="small-note" style="margin-bottom:8px">${monthLabel(viewMonth)} · ${list.length} оп. · ${fmtBase(total)}</div>
+    <div class="small-note" style="margin-bottom:8px">${allT?'Всё время':monthLabel(viewMonth)} · ${list.length} оп. · ${fmtBase(total)}</div>
     ${list.map(opRow).join('')||'<div class="empty">Нет операций</div>'}`);
 }
 // Операции по конкретному счёту (тап по счёту на вкладке «Счета»).
@@ -1583,10 +1586,11 @@ function donutSVG(segs,total) {
   const arcs=segs.map(s=>{ const len=total>0?s.value/total*C:0;
     const el=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"/>`;
     off+=len; return el; }).join('');
+  const tot=fmtBase(total); const fs=Math.max(8, Math.min(15, Math.round(150/Math.max(6,tot.length))));   // подгоняем шрифт, чтобы сумма влезала в кольцо
   return `<svg width="180" height="180" viewBox="0 0 160 160"><g transform="rotate(-90 ${cx} ${cy})">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--card2)" stroke-width="${sw}"/>${arcs}</g>
     <text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="11" fill="var(--muted)">${analysisKind==='expense'?'Расход':'Доход'}</text>
-    <text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="15" font-weight="800" fill="var(--txt)">${fmtBase(total)}</text></svg>`;
+    <text x="${cx}" y="${cy+6+fs/2}" text-anchor="middle" font-size="${fs}" font-weight="800" fill="var(--txt)">${tot}</text></svg>`;
 }
 
 /* ---------- Счета + конверты ---------- */
@@ -1914,6 +1918,7 @@ function buildEntryBase(mode){
   const sp=spendableAccounts(), envs=activeEnvelopes(), accs=activeAccounts();
   return {
     mode, transferKind:'account', amtStr:'', currency:state.baseCurrency, date:todayISO(), note:'', fund:{}, editId:null, distribute:true,
+    distMode:'percent', eqSel:{},   // распределение дохода: 'percent' (по % конвертов) или 'equal' (поровну между отмеченными в eqSel)
     categoryId: mode==='income' ? state.categories.find(c=>c.kind==='income')?.id : state.categories.find(c=>c.kind==='expense')?.id,
     accountId: (sp[0]||accs[0])?.id,
     envelopeId: envs[0]?.id,
@@ -2056,16 +2061,33 @@ function renderEntry() {
       } else if (amtNum<=0) {
         mid+='<div class="small-note" style="margin:6px 2px 0">Инвест-счета возьмут своё сверху, остаток разложишь по конвертам галочками.</div>';
       } else {
-        const {distribution:plan, offTop, mainCur}=computeIncome(amtNum,e.incomeAccountId);
+        const {distribution:plan, offTop, mainCur, remainder}=computeIncome(amtNum,e.incomeAccountId);
         const offNote=Object.entries(offTop).map(([id,o])=>`${esc(acc(id)?.name||'')} +${fmt(o.amt,o.cur)} сверху`).join(' · ');
-        let fundedSum=0, owedSum=0;
-        const rows=activeEnvelopes().map(v=>{ const p=plan[v.id]||0; const on=e.fund[v.id]!==false; if(on)fundedSum+=p; else owedSum+=p;
-          return `<div class="fund-row ${on?'on':''}" onclick="entryToggleFund('${v.id}')">
-            <div class="chk">${on?'✓':''}</div><span class="grow">${esc(v.name)}</span><b>${fmt(p,mainCur)}</b></div>`; }).join('');
-        mid+=`${offNote?`<div class="small-note" style="margin:8px 2px 2px">${offNote}</div>`:''}
-          <div class="small-note" style="margin:8px 2px 4px">Отметь конверты, которые оплачиваешь сейчас:</div>
-          <div class="fund-list">${rows}</div>
-          <div class="info-line" style="margin-top:8px">Оплачу сейчас: <b>${fmt(fundedSum,mainCur)}</b>${owedSum>0.005?` · в долг конвертам: <b>${fmt(owedSum,mainCur)}</b> (полежат свободно на счёте)`:''}</div>`;
+        const modeSeg=`<div class="mini-seg" style="margin-top:8px">
+          <button class="${e.distMode!=='equal'?'active':''}" onclick="entrySetDistMode('percent')">По процентам</button>
+          <button class="${e.distMode==='equal'?'active':''}" onclick="entrySetDistMode('equal')">Поровну</button></div>`;
+        let rows, hint, infoLine;
+        if (e.distMode==='equal') {
+          const cnt=activeEnvelopes().filter(v=>e.eqSel[v.id]).length;
+          const each = cnt>0 ? round2(remainder/cnt) : 0;
+          rows=activeEnvelopes().map(v=>{ const on=!!e.eqSel[v.id];
+            return `<div class="fund-row ${on?'on':''}" onclick="entryToggleEq('${v.id}')">
+              <div class="chk">${on?'✓':''}</div><span class="grow">${esc(v.name)}</span><b>${on?fmt(each,mainCur):'—'}</b></div>`; }).join('');
+          hint='Отметь конверты — сумма разделится между ними поровну:';
+          infoLine = cnt>0
+            ? `<div class="info-line" style="margin-top:8px">В ${cnt} ${plural(cnt,'конверт','конверта','конвертов')} по <b>${fmt(each,mainCur)}</b> · всего <b>${fmt(remainder,mainCur)}</b></div>`
+            : `<div class="small-note" style="margin-top:8px">Отметь хотя бы один конверт.</div>`;
+        } else {
+          let fundedSum=0, owedSum=0;
+          rows=activeEnvelopes().map(v=>{ const p=plan[v.id]||0; const on=e.fund[v.id]!==false; if(on)fundedSum+=p; else owedSum+=p;
+            return `<div class="fund-row ${on?'on':''}" onclick="entryToggleFund('${v.id}')">
+              <div class="chk">${on?'✓':''}</div><span class="grow">${esc(v.name)}</span><b>${fmt(p,mainCur)}</b></div>`; }).join('');
+          hint='Отметь конверты, которые оплачиваешь сейчас:';
+          infoLine=`<div class="info-line" style="margin-top:8px">Оплачу сейчас: <b>${fmt(fundedSum,mainCur)}</b>${owedSum>0.005?` · в долг конвертам: <b>${fmt(owedSum,mainCur)}</b> (полежат свободно на счёте)`:''}</div>`;
+        }
+        mid+=`${offNote?`<div class="small-note" style="margin:8px 2px 2px">${offNote}</div>`:''}${modeSeg}
+          <div class="small-note" style="margin:8px 2px 4px">${hint}</div>
+          <div class="fund-list">${rows}</div>${infoLine}`;
       }
     }
   } else {
@@ -2116,6 +2138,8 @@ function entrySetAccount(id){ entry.accountId=id; const a=acc(id); if(a&&(a.inve
 function entrySetEnvelope(id){ entry.envelopeId=id; renderEntry(); }
 function entrySetIncomeAcc(id){ entry.incomeAccountId=id; renderEntry(); }
 function entrySetDistribute(v){ entry.distribute=v; renderEntry(); }
+function entrySetDistMode(m){ entry.distMode=m; renderEntry(); }
+function entryToggleEq(id){ entry.eqSel[id]=!entry.eqSel[id]; renderEntry(); }
 function entryToggleFund(id){ entry.fund[id] = entry.fund[id]===false ? true : false; renderEntry(); }
 function entrySetFromAcc(id){ entry.fromAccountId=id; renderEntry(); }
 function entrySetToAcc(id){ entry.toAccountId=id; renderEntry(); }
@@ -2150,6 +2174,14 @@ function saveEntry() {
       const mainCur=main.currency||state.baseCurrency;
       tx={id:uid(),type:'income',date:e.date,currency:mainCur,amount:amt,categoryId:e.categoryId,note:e.note,
         accountCredits:{[e.incomeAccountId]:{amt:round2(amt),cur:mainCur}}, plan:{}, distribution:{}};
+    } else if (e.distMode==='equal') {
+      // Режим «Поровну»: остаток делится поровну между отмеченными конвертами (без долга — plan=distribution).
+      const {accountCredits, remainder, distCurrency}=computeIncome(amt, e.incomeAccountId);
+      const selIds=activeEnvelopes().filter(v=>e.eqSel[v.id]).map(v=>v.id);
+      const distribution={};
+      if (selIds.length){ const each=round2(remainder/selIds.length); let acc2=0;
+        selIds.forEach((id,i)=>{ const val = i===selIds.length-1 ? round2(remainder-acc2) : each; distribution[id]=val; acc2=round2(acc2+val); }); }
+      tx={id:uid(),type:'income',date:e.date,currency:distCurrency,amount:amt,categoryId:e.categoryId,note:e.note,accountCredits,plan:distribution,distribution};
     } else {
       // H4: если правим существующий доход и сумма+счёт не изменились — сохраняем ИСХОДНУЮ раскладку
       // (проценты конвертов и off-top на момент создания), меняя лишь галочки «оплачено сейчас».
