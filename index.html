@@ -333,6 +333,24 @@
   .per-all { background:var(--card2); color:var(--muted); font-weight:700; border-radius:var(--r-md); padding:0 15px; min-height:42px; font-size:13px; white-space:nowrap; }
   .per-all.active { background:var(--accent-soft); color:var(--accent-d); }
   .per-all:active { transform:scale(.98); }
+  /* Календарь-сетка */
+  .cal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:4px 2px 14px; }
+  .cal-nav { display:flex; align-items:center; gap:2px; }
+  .cal-nav > button:not(.btn) { width:38px; height:38px; border-radius:var(--r-sm); font-size:20px; color:var(--txt); display:grid; place-items:center; }
+  .cal-nav > button:not(.btn):active { background:var(--card2); }
+  .cal-title { font-weight:800; font-size:16px; min-width:132px; text-align:center; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .cal-wd { text-align:center; font-size:11px; color:var(--muted); font-weight:700; padding:0 0 2px; }
+  .cal-cell { min-height:58px; background:var(--card); border:1px solid var(--line); border-radius:var(--r-sm); padding:5px 4px 4px; cursor:pointer; display:flex; flex-direction:column; gap:4px; overflow:hidden; }
+  .cal-cell.empty { background:transparent; border:none; cursor:default; }
+  .cal-cell.today { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .cal-cell .cal-d { font-size:12.5px; font-weight:600; color:var(--muted); }
+  .cal-cell.today .cal-d { color:var(--accent); }
+  .cal-cell.has { background:var(--card2); }
+  .cal-dots { display:flex; flex-wrap:wrap; gap:3px; }
+  .cal-dot { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+  @media (hover:hover){ .cal-cell.has:hover { border-color:var(--accent); } }
+  @media (max-width:560px){ .cal-cell { min-height:48px; } .cal-grid { gap:3px; } }
   .due-box { background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:var(--r-lg); padding:12px 14px; margin-bottom:12px; }
   .due-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; color:var(--warn-txt); font-size:14px; }
   .due-row { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px dashed var(--warn-line); }
@@ -789,6 +807,7 @@ function defaultState() {
     debts: [],
     recurring: [],
     goals: [],
+    events: [],
     watchlists: [],
     debtBudget: 0,
     debtStrategy: 'snowball',
@@ -800,7 +819,7 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='0.4.4';   // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
+const APP_VERSION='0.5.0';   // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
 const BUILD='2026-11-01';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
   try { const raw = localStorage.getItem(LS_KEY); if (raw) { state = JSON.parse(raw); normalize(); return; } } catch(e){ console.warn(e); }
@@ -817,6 +836,7 @@ function normalize() {
   state.debts ||= [];
   state.recurring ||= [];
   state.goals ||= [];
+  state.events ||= [];
   state.watchlists ||= [];
   state.debtStrategy ||= 'snowball';
   state.debtBudget = state.debtBudget || 0;
@@ -835,6 +855,9 @@ function normalize() {
   state.recurring.forEach(r => { r.active = r.active!==false; r.day = Math.max(1, Math.min(31, r.day||1)); });
   state.goals.forEach(g => { g.saved = round2(g.saved||0); g.target = round2(g.target||0); g.currency = g.currency || state.baseCurrency; g.log ||= []; g.color=cleanColor(g.color,'#7b5cff'); g.icon=cleanIcon(g.icon,'🎯'); if(g.envelopeId && !state.envelopes.some(e=>e.id===g.envelopeId)) delete g.envelopeId; });
   state.debts.forEach(d => { d.rate = d.rate||0; d.payments ||= []; d.accountId = (d.accountId && acc(d.accountId)) ? d.accountId : null; d.payments.forEach(p=>{ p.accountId = (p.accountId && acc(p.accountId)) ? p.accountId : null; }); });
+  // События календаря (планируемые подарки/праздники/разовые платежи с привязкой к конверту)
+  state.events = (state.events||[]).filter(ev=>ev && /^\d{4}-\d{2}-\d{2}$/.test(ev.date||''));
+  state.events.forEach(ev => { ev.amount=round2(ev.amount||0); ev.currency=ev.currency||state.baseCurrency; ev.done=!!ev.done; ev.title=String(ev.title||'').slice(0,80); ev.note=String(ev.note||'').slice(0,200); ev.envelopeId=(ev.envelopeId && state.envelopes.some(e=>e.id===ev.envelopeId))?ev.envelopeId:null; ev.icon=cleanIcon(ev.icon,'🎁'); });
   // M6: выбросить повреждённые транзакции (без типа/даты), иначе рендер падает в пустой экран.
   state.transactions = state.transactions.filter(t => t && typeof t==='object' && t.type && /^\d{4}-\d{2}-\d{2}$/.test(String(t.date||'')));
   // Санитайз split-расходов: валидные ссылки, положительные суммы; split имеет смысл от 2 частей.
@@ -1941,7 +1964,7 @@ let entry=null, entryFirstRender=true;
 function buildEntryBase(mode){
   const sp=spendableAccounts(), envs=activeEnvelopes(), accs=activeAccounts();
   return {
-    mode, transferKind:'account', amtStr:'', currency:state.baseCurrency, date:todayISO(), note:'', fund:{}, editId:null, distribute:true,
+    mode, transferKind:'account', amtStr:'', currency:state.baseCurrency, date:todayISO(), note:'', fund:{}, editId:null, distribute:true, eventId:null,
     distMode:'percent', eqSel:{},   // распределение дохода: 'percent' (по % конвертов) или 'equal' (поровну между отмеченными в eqSel)
     categoryId: mode==='income' ? state.categories.find(c=>c.kind==='income')?.id : state.categories.find(c=>c.kind==='expense')?.id,
     accountId: (sp[0]||accs[0])?.id,
@@ -2228,6 +2251,7 @@ function saveEntry() {
     if (!e.accountId){ toast('Выбери счёт'); return; }
     const ax=acc(e.accountId); const noEnv=!!(ax&&(ax.investment||ax.excluded));
     tx={id:uid(),type:'expense',date:e.date,currency:accCur(e.accountId),amount:amt,accountId:e.accountId,envelopeId:noEnv?null:e.envelopeId,categoryId:e.categoryId,note:e.note};
+    if(e.eventId){ const ev=(state.events||[]).find(x=>x.id===e.eventId); if(ev) ev.done=true; }   // провели событие календаря → помечаем выполненным
   }
   if (e.editId){ tx.id=e.editId; const i=state.transactions.findIndex(t=>t.id===e.editId);
     if (i>=0) state.transactions[i]=tx; else state.transactions.push(tx); }
@@ -2532,27 +2556,103 @@ function payAgendaItems(){
   for(const d of state.debts){ const rem=debtRemaining(d); if(rem<=0.005||!d.dueDate) continue;
     items.push({date:d.dueDate, kind:'debt', id:d.id, type:d.direction==='iowe'?'expense':'income', amount:rem, currency:d.currency,
       title:(d.direction==='iowe'?'Вернуть долг · ':'Ждут возврат · ')+(d.counterparty||'—')}); }
+  for(const ev of (state.events||[])){ if(ev.done) continue;
+    items.push({date:ev.date, kind:'event', id:ev.id, type:'expense', amount:ev.amount, currency:ev.currency, title:ev.title||'Событие'}); }
   items.sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
   return items;
 }
+let calMonth=null;
+function calShift(d){ let [y,m]=calMonth.split('-').map(Number); m+=d; if(m<1){m=12;y--;} if(m>12){m=1;y++;} calMonth=`${y}-${String(m).padStart(2,'0')}`; renderMore(); }
+function calToday(){ calMonth=todayISO().slice(0,7); renderMore(); }
+// Все элементы календаря за месяц ym: регулярные платежи, долги со сроком, планируемые события.
+function calItems(ym){
+  const items=[]; const todayD=+todayISO().slice(8,10); const curYm=todayISO().slice(0,7);
+  for(const r of state.recurring){ if(r.active===false) continue; const date=recurDate(r,ym);
+    const posted=(ym===curYm && r.lastPosted===ym); const due=(ym===curYm && Math.min(r.day||1,daysInMonth(ym))<=todayD && !posted && acc(r.accountId));
+    items.push({date, kind:'recur', id:r.id, type:r.type, amount:r.amount, currency:r.currency, title:r.note||catById(r.categoryId)?.name||(r.type==='income'?'Доход':'Платёж'), canPost:!!due, done:posted, icon:catById(r.categoryId)?.icon||'🔁'}); }
+  for(const d of state.debts){ if(!d.dueDate || d.dueDate.slice(0,7)!==ym) continue; const rem=debtRemaining(d); if(rem<=0.005) continue;
+    items.push({date:d.dueDate, kind:'debt', id:d.id, type:d.direction==='iowe'?'expense':'income', amount:rem, currency:d.currency, title:(d.direction==='iowe'?'Вернуть · ':'Ждут возврат · ')+(d.counterparty||'—'), icon:'🤝'}); }
+  for(const ev of state.events){ if((ev.date||'').slice(0,7)!==ym) continue;
+    items.push({date:ev.date, kind:'event', id:ev.id, type:'expense', amount:ev.amount, currency:ev.currency, title:ev.title||'Событие', envelopeId:ev.envelopeId, done:ev.done, icon:ev.icon||'🎁'}); }
+  return items.sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+}
+const calColor = it => it.kind==='event' ? 'var(--accent)' : (it.type==='income'?'var(--green)':'var(--red)');
 function renderPayCalendar(el){
-  const today=todayISO(); const ym=today.slice(0,7); const items=payAgendaItems();
-  const overdue=items.filter(i=>i.date<today), upcoming=items.filter(i=>i.date>=today);
-  const monExp=round2(upcoming.filter(i=>i.type==='expense'&&i.date.slice(0,7)===ym).reduce((s,i)=>s+toBase(i.amount,i.currency),0));
-  const monInc=round2(upcoming.filter(i=>i.type==='income'&&i.date.slice(0,7)===ym).reduce((s,i)=>s+toBase(i.amount,i.currency),0));
-  const itemRow=i=>{ const ic=i.kind==='debt'?'🤝':(i.type==='income'?'↓':'↑'); const cls=i.type==='income'?'green':'red'; const sign=i.type==='income'?'+':'−';
-    const btn=i.canPost?`<button class="btn small sec" style="margin-top:6px" onclick="postRecurring('${i.id}')">Внести</button>`:'';
-    return `<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:8px">
-      <div class="cat-ic" style="background:var(--card2);flex:0 0 auto">${ic}</div>
-      <div class="grow" style="min-width:0"><div style="font-weight:600">${esc(i.title)}</div></div>
-      <div style="text-align:right;flex:0 0 auto"><div style="font-weight:800" class="${cls}">${sign}${fmt(i.amount,i.currency)}</div>${btn}</div></div>`; };
-  const groupByDate=list=>{ const g={}; for(const i of list)(g[i.date] ||= []).push(i); return Object.keys(g).sort().map(dt=>`<div class="day-head"><span class="d">${dayHead(dt)}</span></div>${g[dt].map(itemRow).join('')}`).join(''); };
-  el.innerHTML=`<button class="back-btn" onclick="backMore()">‹ Назад</button><h2 style="margin:0 4px 12px">📅 Календарь платежей</h2>
-    <div class="card tight"><div class="row"><span class="muted">До конца месяца к оплате</span><span class="red" style="font-weight:800">${fmtBase(monExp)}</span></div>
+  if(!calMonth) calMonth=todayISO().slice(0,7);
+  const today=todayISO(); const ym=calMonth; const items=calItems(ym);
+  const dayMap={}; items.forEach(it=>{ const d=+it.date.slice(8,10); (dayMap[d] ||= []).push(it); });
+  const [y,m]=ym.split('-').map(Number); const lead=(new Date(y,m-1,1).getDay()+6)%7; const dim=daysInMonth(ym);
+  const cells=[]; for(let i=0;i<lead;i++) cells.push(null); for(let dd=1;dd<=dim;dd++) cells.push(dd); while(cells.length%7) cells.push(null);
+  const WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const grid=`<div class="cal-grid">${WD.map(w=>`<div class="cal-wd">${w}</div>`).join('')}${cells.map(dd=>{
+      if(dd===null) return `<div class="cal-cell empty"></div>`;
+      const ds=`${ym}-${String(dd).padStart(2,'0')}`; const its=dayMap[dd]||[]; const isToday=ds===today;
+      const dots=its.slice(0,4).map(it=>`<span class="cal-dot" style="background:${calColor(it)};${it.done?'opacity:.35':''}"></span>`).join('');
+      return `<div class="cal-cell ${isToday?'today':''} ${its.length?'has':''}" onclick="openCalDay('${ds}')"><div class="cal-d">${dd}</div><div class="cal-dots">${dots}</div></div>`;
+    }).join('')}</div>`;
+  const {envBal}=computeBalances();
+  const cov=(()=>{ const byEnv={}; for(const ev of state.events){ if(ev.done||!ev.envelopeId) continue; byEnv[ev.envelopeId]=round2((byEnv[ev.envelopeId]||0)+toBase(ev.amount,ev.currency)); }
+    const rows=Object.entries(byEnv).map(([eid,planned])=>{ const e=env(eid); if(!e) return ''; const bal=round2(envelopeBase(envBal,eid)); const ok=bal>=planned-0.005;
+      return `<div class="row" style="margin-top:9px;align-items:flex-start"><span class="grow">${e.icon||'✉️'} ${esc(e.name)}</span><span style="text-align:right"><b class="${ok?'green':'red'}">${fmtBase(planned)}</b> <span class="muted">из ${fmtBase(bal)}</span><br><span class="small-note ${ok?'green':'red'}">${ok?'хватает ✓':'не хватает '+fmtBase(planned-bal)}</span></span></div>`; }).join('');
+    return rows?`<div class="card tight" style="margin-top:12px"><div class="section-title" style="margin:0 0 2px">🎁 Запланировано из конвертов</div>${rows}</div>`:''; })();
+  const monExp=round2(items.filter(i=>i.type==='expense'&&!i.done).reduce((s,i)=>s+toBase(i.amount,i.currency),0));
+  const monInc=round2(items.filter(i=>i.type==='income'&&!i.done).reduce((s,i)=>s+toBase(i.amount,i.currency),0));
+  const addDate=(ym===today.slice(0,7))?today:ym+'-01';
+  el.innerHTML=`<button class="back-btn" onclick="backMore()">‹ Назад</button>
+    <div class="cal-head"><h2 style="margin:0">📅 Календарь</h2>
+      <div class="cal-nav"><button onclick="calShift(-1)" aria-label="Пред. месяц">‹</button><span class="cal-title">${monthLabel(ym)}</span><button onclick="calShift(1)" aria-label="След. месяц">›</button><button class="btn sec small" style="margin-left:6px" onclick="calToday()">Сегодня</button></div></div>
+    ${grid}
+    <div class="card tight" style="margin-top:14px"><div class="row"><span class="muted">К оплате за ${monthLabel(ym)}</span><span class="red" style="font-weight:800">${fmtBase(monExp)}</span></div>
       ${monInc>0.5?`<div class="row"><span class="muted">Ожидается доход</span><span class="green" style="font-weight:800">${fmtBase(monInc)}</span></div>`:''}</div>
-    ${overdue.length?`<div class="section-title" style="color:var(--red)">Просрочено / пора внести</div>${overdue.map(itemRow).join('')}`:''}
-    ${upcoming.length?`<div class="section-title">Предстоит</div>${groupByDate(upcoming)}`:(overdue.length?'':`<div class="empty"><div class="big">📅</div>Нет запланированных платежей. Добавь регулярные платежи (в «Ещё») или долг со сроком — и они появятся здесь.</div>`)}
-    <div class="small-note" style="margin-top:12px">Показаны регулярные платежи (этот и следующий месяц) и долги со сроком. «Внести» проводит платёж сразу.</div>`;
+    ${cov}
+    <button class="btn" style="margin-top:12px" onclick="openEvent(null,'${addDate}')">＋ Добавить событие</button>
+    <div class="small-note" style="margin-top:10px">Нажми на день, чтобы увидеть и добавить события. 🎁 События (подарки, праздники) привязываются к конверту — видно, хватает ли на них денег. «Провести» создаёт реальный расход.</div>`;
+}
+function openCalDay(ds){
+  const items=calItems(ds.slice(0,7)).filter(i=>i.date===ds);
+  const rowHtml=i=>{ const sign=i.type==='income'?'+':'−'; const cls=i.type==='income'?'green':'red';
+    let actions='';
+    if(i.kind==='recur'&&i.canPost) actions=`<button class="btn small sec" style="margin-top:6px" onclick="postRecurring('${i.id}');closeSheet()">Внести</button>`;
+    else if(i.kind==='event'&&!i.done) actions=`<div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end"><button class="btn small sec" onclick="postEvent('${i.id}')">Провести</button><button class="btn small sec" onclick="openEvent('${i.id}')">✏️</button></div>`;
+    else if(i.kind==='event'&&i.done) actions=`<div style="margin-top:6px"><span class="badge" style="color:var(--green)">проведено</span> <button class="btn small sec" onclick="openEvent('${i.id}')">✏️</button></div>`;
+    return `<div class="op" style="cursor:default"><div class="cat-ic" style="background:var(--card2)">${i.icon||'•'}</div>
+      <div class="oi"><div class="ot">${esc(i.title)}</div><div class="os">${i.kind==='event'?(i.envelopeId?('конверт «'+esc(env(i.envelopeId)?.name||'')+'»'):'без конверта'):(i.kind==='recur'?'регулярный платёж':'долг со сроком')}</div></div>
+      <div style="text-align:right;flex:0 0 auto"><div class="oa ${cls}">${sign}${fmt(i.amount,i.currency)}</div>${actions}</div></div>`; };
+  openSheet(`<h2>${dayHead(ds)}</h2>
+    ${items.length?items.map(rowHtml).join(''):'<div class="small-note" style="margin:8px 0">На этот день ничего не запланировано.</div>'}
+    <button class="btn" style="margin-top:12px" onclick="openEvent(null,'${ds}')">＋ Добавить событие на этот день</button>`);
+}
+function openEvent(id, presetDate){
+  const ev=id?state.events.find(x=>x.id===id):null;
+  const date=ev?ev.date:(presetDate||todayISO());
+  const envOpts=`<option value="">— без конверта —</option>`+activeEnvelopes().map(e=>`<option value="${e.id}" ${ev&&ev.envelopeId===e.id?'selected':''}>${esc(e.name)}</option>`).join('');
+  openSheet(`<h2>${ev?'Изменить событие':'Новое событие'}</h2>
+    <label class="field"><span>Название</span><input class="input" id="ev-title" value="${ev?esc(ev.title):''}" placeholder="Например: ДР Вики"></label>
+    <label class="field"><span>Дата</span><input class="input" id="ev-date" type="date" value="${date}"></label>
+    <label class="field"><span>Сумма</span><div class="two"><input class="input" id="ev-amt" type="number" inputmode="decimal" value="${ev&&ev.amount?ev.amount:''}" placeholder="сколько заложить">
+      <select class="input" id="ev-cur">${currencyOptions(ev?ev.currency:state.baseCurrency)}</select></div></label>
+    <label class="field"><span>Из конверта</span><select class="input" id="ev-env">${envOpts}</select></label>
+    <div class="small-note" style="margin:-6px 2px 10px">Сумма резервируется в календаре под этот конверт — видно, хватает ли на все запланированные события. На баланс конверта событие НЕ влияет, пока не нажмёшь «Провести».</div>
+    <label class="field"><span>Заметка</span><input class="input" id="ev-note" value="${ev?esc(ev.note):''}"></label>
+    <button class="btn" onclick="saveEvent('${id||''}')">Сохранить</button>
+    ${ev?`<div class="btn-grid" style="margin-top:10px">${ev.done?'<button class="btn sec off">Уже проведено</button>':`<button class="btn sec" onclick="postEvent('${ev.id}')">Провести</button>`}<button class="btn danger" onclick="deleteEvent('${ev.id}')">Удалить</button></div>`:''}`);
+}
+function saveEvent(id){
+  const title=document.getElementById('ev-title').value.trim(); if(!title){ toast('Введи название'); return; }
+  const date=document.getElementById('ev-date').value; if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ toast('Укажи дату'); return; }
+  const amount=round2(parseFloat(document.getElementById('ev-amt').value)||0);
+  const currency=document.getElementById('ev-cur').value; const envelopeId=document.getElementById('ev-env').value||null; const note=document.getElementById('ev-note').value.trim();
+  if(id){ const ev=state.events.find(x=>x.id===id); if(ev) Object.assign(ev,{title,date,amount,currency,envelopeId,note}); }
+  else state.events.push({id:uid(),title,date,amount,currency,envelopeId,note,done:false,icon:'🎁'});
+  save(); closeSheet(); toast('Сохранено ✓'); if(calMonth) calMonth=date.slice(0,7); renderMore();
+}
+async function deleteEvent(id){ if(!await confirmSheet('Удалить событие?',{okText:'Удалить',danger:true}))return; state.events=state.events.filter(e=>e.id!==id); save(); closeSheet(); toast('Удалено'); renderMore(); }
+function postEvent(id){ const ev=state.events.find(x=>x.id===id); if(!ev) return;
+  entry=buildEntryBase('expense'); catExpanded=false; entryFirstRender=true;
+  if(ev.amount>0) entry.amtStr=String(ev.amount);
+  if(ev.envelopeId && env(ev.envelopeId)) entry.envelopeId=ev.envelopeId;
+  entry.note=ev.title; entry.date = ev.date<=todayISO()?ev.date:todayISO(); entry.eventId=id;
+  renderEntry(); showSheetShell();
 }
 function renderRecurring(el){
   const ym=todayISO().slice(0,7), today=+todayISO().slice(8,10);
