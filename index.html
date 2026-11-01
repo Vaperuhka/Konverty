@@ -310,6 +310,8 @@
 
   main { padding:14px; max-width:640px; margin:0 auto; }
   .screen { display:none; } .screen.active { display:block; animation:fade .22s ease; }
+  /* Экраны без оранжевого баннера — учитываем вырез/статус-бар телефона сверху */
+  #screen-home, #screen-accounts, #screen-more { padding-top: var(--safe-t); }
   @keyframes fade { from{opacity:0; transform:translateY(4px)} to{opacity:1;transform:none} }
 
   .card { background:var(--card); border:1px solid var(--card-border); border-radius:var(--radius); padding:16px; margin-bottom:12px; box-shadow:var(--shadow); }
@@ -321,6 +323,16 @@
   .search-inp { flex:1; }
   .scope-btn { flex:0 0 auto; background:var(--card2); color:var(--muted); font-weight:700; border-radius:var(--r-md); padding:0 15px; font-size:13px; white-space:nowrap; }
   .scope-btn:active { transform:scale(.98); }
+  /* Полоса выбора периода (под баннером на Операциях/Анализе) */
+  .period-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+  .per-nav { display:flex; align-items:center; gap:2px; background:var(--card2); border-radius:var(--r-md); padding:3px; }
+  .per-nav button { width:36px; height:36px; border-radius:var(--r-sm); color:var(--txt); font-size:20px; display:grid; place-items:center; }
+  .per-nav button:disabled { opacity:.3; pointer-events:none; }
+  .per-nav button:not(:disabled):active { background:var(--card); transform:scale(.94); }
+  .per-nav span { font-weight:700; font-size:14px; min-width:124px; text-align:center; }
+  .per-all { background:var(--card2); color:var(--muted); font-weight:700; border-radius:var(--r-md); padding:0 15px; min-height:42px; font-size:13px; white-space:nowrap; }
+  .per-all.active { background:var(--accent-soft); color:var(--accent-d); }
+  .per-all:active { transform:scale(.98); }
   .due-box { background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:var(--r-lg); padding:12px 14px; margin-bottom:12px; }
   .due-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; color:var(--warn-txt); font-size:14px; }
   .due-row { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px dashed var(--warn-line); }
@@ -462,6 +474,8 @@
   /* ===== Главная (дашборд) ===== */
   .home-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:2px 2px 16px; }
   .home-title { font-size:24px; font-weight:800; letter-spacing:.2px; }
+  /* Лёгкий заголовок экрана в контенте (вместо оранжевого баннера на Счетах/Ещё) */
+  .scr-title { font-size:24px; font-weight:800; letter-spacing:.2px; margin:2px 2px 16px; }
   .home-subtitle { color:var(--muted); font-size:13px; margin-top:2px; }
   .home-acts { display:flex; gap:9px; flex:0 0 auto; }
   .home-act { width:42px; height:42px; border-radius:50%; background:var(--card2); display:grid; place-items:center; font-size:18px; box-shadow:var(--shadow); }
@@ -773,7 +787,8 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='3.9';
+const APP_VERSION='0.4.0';   // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
+const BUILD='2026-11-01';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
   try { const raw = localStorage.getItem(LS_KEY); if (raw) { state = JSON.parse(raw); normalize(); return; } } catch(e){ console.warn(e); }
   state = defaultState(); save();
@@ -1070,7 +1085,7 @@ function switchTab(tab){ if(moreView){ moreView=null; navConsume(); } currentTab
 document.querySelectorAll('nav.tabbar button.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 document.querySelectorAll('.sidenav .snav').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 { const _ad=document.getElementById('addbtnDesk'); if(_ad) _ad.addEventListener('click',()=>{ haptic(); openEntry('expense'); }); }
-{ const _sv=document.getElementById('snVer'); if(_sv) _sv.textContent='v'+APP_VERSION; }
+{ const _sv=document.getElementById('snVer'); if(_sv) _sv.textContent='v'+APP_VERSION+' · '+BUILD.slice(5).split('-').reverse().join('.'); }
 
 /* =================================================================
    Рендер
@@ -1078,20 +1093,25 @@ document.querySelectorAll('.sidenav .snav').forEach(b=>b.addEventListener('click
 const monthTx = () => state.transactions.filter(t=>t.date.slice(0,7)===viewMonth);
 function render() {
   document.getElementById('hdr').textContent = TITLES[currentTab];
-  // Главная заменяет шапку своим hero-блоком — прячем баннер целиком
-  document.querySelector('header').style.display = currentTab==='home' ? 'none' : '';
+  // Оранжевый баннер нужен только там, где в нём есть суммы (Операции/Анализ).
+  // На Главной — свой hero; на Счетах/Ещё — лёгкий заголовок в контенте (баннер прячем).
+  const noBanner = currentTab==='home' || currentTab==='accounts' || currentTab==='more';
+  document.querySelector('header').style.display = noBanner ? 'none' : '';
   if (currentTab==='home') { renderHome(); return; }
   const showMonth = currentTab==='ops' || currentTab==='analysis';
-  document.getElementById('monthNav').style.visibility = showMonth?'visible':'hidden';
-  document.getElementById('mlabel').textContent = monthLabel(viewMonth);
+  // Выбор месяца переехал из баннера вниз (в контент экранов) — в шапке стрелок больше нет.
+  document.getElementById('monthNav').style.display = 'none';
   const hsum = document.getElementById('hsum');
   if (showMonth) {
-    const mt=monthTx();
-    const inc=mt.filter(t=>t.type==='income').reduce((s,t)=>s+toBase(t.amount,t.currency),0);
-    const exp=mt.filter(t=>t.type==='expense').reduce((s,t)=>s+toBase(t.amount,t.currency),0);
+    // На «Операциях» в режиме «Всё время» показываем суммы за всё время, иначе — за месяц.
+    const allTime = currentTab==='ops' && opsScope==='all';
+    const src = allTime ? state.transactions : monthTx();
+    const inc=src.filter(t=>t.type==='income').reduce((s,t)=>s+toBase(t.amount,t.currency),0);
+    const exp=src.filter(t=>t.type==='expense').reduce((s,t)=>s+toBase(t.amount,t.currency),0);
+    const perLbl = allTime ? 'за всё время' : 'за месяц';
     hsum.style.display='flex';
-    hsum.innerHTML = `<div class="box"><div class="l">Доходы</div><div class="v">${fmtBase(inc)}</div></div>
-      <div class="box"><div class="l">Расходы</div><div class="v">${fmtBase(exp)}</div></div>`;
+    hsum.innerHTML = `<div class="box"><div class="l">Доходы ${perLbl}</div><div class="v">${fmtBase(inc)}</div></div>
+      <div class="box"><div class="l">Расходы ${perLbl}</div><div class="v">${fmtBase(exp)}</div></div>`;
   } else hsum.style.display='none';
   const hfree=document.getElementById('hfree');
   if (currentTab==='ops') {
@@ -1261,7 +1281,19 @@ function opRow(t) {
 }
 let opsQuery='', opsType='all', opsScope='month';
 function opsSetType(v){ opsType=v; renderOps(); }
-function opsToggleScope(){ opsScope = opsScope==='month'?'all':'month'; renderOps(); }
+function opsToggleScope(){ opsScope = opsScope==='month'?'all':'month'; render(); }   // render() обновит и баннер-суммы, и список
+// Полоса выбора периода (переехала из баннера). withAll=true — добавляет переключатель «Всё время» (для Операций).
+function periodBar(withAll){
+  const all = withAll && opsScope==='all';
+  return `<div class="period-bar">
+    <div class="per-nav">
+      <button onclick="shiftMonth(-1)" ${all?'disabled':''} aria-label="Предыдущий месяц">‹</button>
+      <span>${all?'Всё время':monthLabel(viewMonth)}</span>
+      <button onclick="shiftMonth(1)" ${all?'disabled':''} aria-label="Следующий месяц">›</button>
+    </div>
+    ${withAll?`<button class="per-all ${all?'active':''}" onclick="opsToggleScope()">${all?'✓ Всё время':'Всё время'}</button>`:''}
+  </div>`;
+}
 function renderOps() {
   const el=document.getElementById('screen-ops');
   const ymNow=todayISO().slice(0,7);
@@ -1275,12 +1307,11 @@ function renderOps() {
   const filterBar=`<div class="ops-filter">
     <div class="search-row">
       <input class="input search-inp" id="opsSearch" placeholder="🔍 Поиск: заметка, категория, сумма…" value="${esc(opsQuery)}" oninput="opsQuery=this.value;renderOpsList()">
-      <button class="scope-btn" onclick="opsToggleScope()">${opsScope==='month'?'За месяц':'Везде'} ⇄</button>
     </div>
     <div class="chips" style="margin-top:8px">${typeChips}</div></div>`;
   const st=(viewMonth===ymNow)?computeStreak():{cur:0,best:0};
   const streakChip = st.cur>=2 ? `<div class="streak-chip">🔥 <b>${st.cur}</b> ${plural(st.cur,'день','дня','дней')} подряд с записями${st.best>st.cur?` · рекорд ${st.best}`:(st.cur>=7?' · так держать!':'')}</div>` : '';
-  el.innerHTML = streakChip + dueBanner + filterBar + `<div id="opsList"></div>`;
+  el.innerHTML = periodBar(true) + streakChip + dueBanner + filterBar + `<div id="opsList"></div>`;
   renderOpsList();
 }
 // Множественное число (рус.): plural(5,'день','дня','дней') → 'дней'
@@ -1460,7 +1491,7 @@ function renderAnalysis() {
       <div class="row"><span class="muted">Расходы</span><span style="font-weight:800">${fmtBase(yExp)}</span></div>
       <div class="row"><span class="muted">Чистый поток</span><span class="${yNet>=0?'green':'red'}" style="font-weight:800">${yNet>=0?'+':'−'}${fmtBase(Math.abs(yNet))}</span></div>
       ${yInc>0?`<div class="row"><span class="muted">Норма сбережений</span><span class="${rate>=0?'green':'red'}" style="font-weight:800">${rate}%</span></div>`:''}</div>`; })();
-  if (!entries.length){ el.innerHTML=seg+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="empty"><div class="big">📊</div>Нет ${analysisKind==='expense'?'расходов':'доходов'} за ${monthLabel(viewMonth)}</div>`; return; }
+  if (!entries.length){ el.innerHTML=periodBar(false)+seg+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="empty"><div class="big">📊</div>Нет ${analysisKind==='expense'?'расходов':'доходов'} за ${monthLabel(viewMonth)}</div>`; return; }
   const lines=entries.map(e=>{ const pct=total>0?Math.round(e.value/total*100):0;
     return `<div class="cat-line" style="cursor:pointer" onclick="openCatOps('${e.id}')"><div class="ci" style="background:${e.color}">${e.icon}</div>
       <div class="cinfo"><div class="cname"><span>${esc(e.name)} ›</span><span>${fmtBase(e.value)}</span></div>
@@ -1477,7 +1508,7 @@ function renderAnalysis() {
   // Топ-5 крупных
   const top=mt.slice().sort((a,b)=>toBaseAt(b.amount,b.currency,b.date)-toBaseAt(a.amount,a.currency,a.date)).slice(0,5);
   const top5Card=`<div class="card"><div class="section-title" style="margin:0 0 4px">Топ-5 крупных ${analysisKind==='income'?'поступлений':'трат'}</div>${top.map(opRow).join('')}</div>`;
-  el.innerHTML = seg+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="card"><div class="donut-wrap">${donutSVG(entries,total)}</div></div><div class="card">${sortToggle}${lines}</div>`+weekdayCard+top5Card;
+  el.innerHTML = periodBar(false)+seg+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="card"><div class="donut-wrap">${donutSVG(entries,total)}</div></div><div class="card">${sortToggle}${lines}</div>`+weekdayCard+top5Card;
 }
 function openCatOps(catId){
   const kind=analysisKind;
@@ -1630,6 +1661,7 @@ function renderAccounts() {
     <span>Конверты (бюджет) · ${activeEnvelopes().length}</span>
     <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:700">${fmtBase(committed)} ${envCollapsed?'▾':'▴'}</span></div>`;
   el.innerHTML = `
+    <div class="scr-title">Счета</div>
     <div class="card total-card"><div class="l">Всего денег (в ${state.baseCurrency})</div>
       <div class="a">${fmtBase(net)}</div><div class="cur">${curB}</div></div>
     ${breakdown}
@@ -1712,6 +1744,7 @@ function renderMore() {
   if (moreView==='backups') return renderBackups(el);
   if (moreView==='csv') return renderCsvImport(el);
   el.innerHTML = `
+    <div class="scr-title">Ещё</div>
     <div class="menu-item" onclick="openMore('plan')"><span class="mi">📋</span>План на месяц<span class="ar">›</span></div>
     <div class="menu-item" onclick="openMore('calendar')"><span class="mi">📅</span>Календарь платежей<span class="ar">›</span></div>
     <div class="menu-item" onclick="openMore('goals')"><span class="mi">🎯</span>Цели-накопления<span class="ar">›</span></div>
@@ -1738,7 +1771,7 @@ function renderMore() {
     <input type="file" id="importFile" accept="application/json" class="hidden">
     <button class="btn sec" style="margin-top:10px" onclick="exportCSV()">📄 Экспорт операций в CSV (Excel)</button>
     <button class="btn danger" style="margin-top:10px" onclick="resetAll()">Сбросить все данные</button>
-    <div class="small-note" style="margin:12px 6px 30px">Данные хранятся на этом устройстве. Автоматические резервные копии — в разделе «Резервные копии»; для переноса на другое устройство делай экспорт в файл.<br>Версия ${APP_VERSION}</div>`;
+    <div class="small-note" style="margin:12px 6px 30px">Данные хранятся на этом устройстве. Автоматические резервные копии — в разделе «Резервные копии»; для переноса на другое устройство делай экспорт в файл.<br>Версия ${APP_VERSION} · сборка ${BUILD}</div>`;
   const imp=document.getElementById('importFile'); if(imp) imp.onchange=importData;
   const csvf=document.getElementById('csvFile'); if(csvf) csvf.onchange=startCsvImport;
 }
