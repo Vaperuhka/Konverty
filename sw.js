@@ -1,6 +1,6 @@
 // Service worker — офлайн-кэш приложения.
 // Данные пользователя хранятся в localStorage (не здесь), кэшируется только код приложения.
-const CACHE = 'konverty-v15';
+const CACHE = 'konverty-v16';
 const ASSETS = [
   './',
   './index.html',
