@@ -204,6 +204,66 @@
     --shadow: 0 3px 14px rgba(30,70,110,.06), 0 1px 4px rgba(30,70,110,.05);
     --shadow-lift: 0 8px 24px rgba(30,70,110,.12);
   }
+
+  /* ===== Монарх — глубокий индиго с коралловым акцентом ===== */
+  html[data-theme="monarch"] {
+    color-scheme: dark;
+    --bg:#0e1424; --card:#18203a; --card2:#222c4d; --card-border:#2b3659; --line:#273152;
+    --txt:#e8ebf7; --muted:#8d96b8;
+    --accent:#ff6a5d; --accent-d:#e8513f; --accent-soft:#3a2230;
+    --green:#3fd08a; --red:#fb6f84; --red-soft:#3a2026;
+    --grad1:#ff7a5e; --grad2:#ee5a46; --on-accent:#ffffff;
+    --header-shadow:rgba(0,0,0,.5); --accent-glow:rgba(255,106,93,.28); --accent-glow-strong:rgba(255,106,93,.5);
+    --input-focus-bg:#222c4d; --toast-bg:#eef0fb; --toast-txt:#141a2e;
+    --danger-bg:#3a2026; --danger-txt:#fb6f84; --warn-bg:#332a14; --warn-line:#4d4223; --warn-txt:#e6c56a;
+    --inv-bg:#2f2a4a; --inv-txt:#d7b56a;
+    --shadow:0 3px 14px rgba(0,0,0,.32), 0 1px 3px rgba(0,0,0,.26); --shadow-lift:0 10px 30px rgba(0,0,0,.5);
+  }
+
+  /* ===== Уголь — почти чёрный графит с лаймовым акцентом ===== */
+  html[data-theme="charcoal"] {
+    color-scheme: dark;
+    --bg:#0c0e10; --card:#16191d; --card2:#1e2227; --card-border:#272c32; --line:#23282d;
+    --txt:#e9edea; --muted:#8a938c;
+    --accent:#b6e34b; --accent-d:#9ccb3a; --accent-soft:#232f19;
+    --green:#4ccf9b; --red:#ff6b73; --red-soft:#331f22;
+    --grad1:#242a30; --grad2:#15181c; --on-accent:#17230a;
+    --header-shadow:rgba(0,0,0,.5); --accent-glow:rgba(182,227,75,.22); --accent-glow-strong:rgba(182,227,75,.42);
+    --input-focus-bg:#1e2227; --toast-bg:#eef0ee; --toast-txt:#16191d;
+    --danger-bg:#331f22; --danger-txt:#ff6b73; --warn-bg:#2e2914; --warn-line:#4a4223; --warn-txt:#e6c56a;
+    --inv-bg:#2b2a18; --inv-txt:#d7b56a;
+    --shadow:0 3px 14px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3); --shadow-lift:0 10px 30px rgba(0,0,0,.55);
+  }
+
+  /* ===== Аметист — глубокий фиолетовый ===== */
+  html[data-theme="amethyst"] {
+    color-scheme: dark;
+    --bg:#15102a; --card:#1e1740; --card2:#281f52; --card-border:#342a63; --line:#2e2558;
+    --txt:#ece8fb; --muted:#9a90c8;
+    --accent:#a06bff; --accent-d:#8657e6; --accent-soft:#241a4a;
+    --green:#4bd0a0; --red:#ff7b8a; --red-soft:#351f3a;
+    --grad1:#8a5cff; --grad2:#6c3fd6; --on-accent:#ffffff;
+    --header-shadow:rgba(0,0,0,.5); --accent-glow:rgba(160,107,255,.3); --accent-glow-strong:rgba(160,107,255,.5);
+    --input-focus-bg:#281f52; --toast-bg:#efecfb; --toast-txt:#1a1333;
+    --danger-bg:#351f3a; --danger-txt:#ff7b8a; --warn-bg:#2f2740; --warn-line:#473c66; --warn-txt:#d7b56a;
+    --inv-bg:#2f2a4a; --inv-txt:#d7b56a;
+    --shadow:0 3px 14px rgba(0,0,0,.34), 0 1px 3px rgba(0,0,0,.28); --shadow-lift:0 10px 30px rgba(0,0,0,.52);
+  }
+
+  /* ===== Изумруд — глубокий зелёный с тёплым золотом ===== */
+  html[data-theme="emerald"] {
+    color-scheme: dark;
+    --bg:#0b1512; --card:#122420; --card2:#1a302a; --card-border:#243f37; --line:#203a33;
+    --txt:#e6f0ea; --muted:#8aa89b;
+    --accent:#e0b24a; --accent-d:#c89a32; --accent-soft:#2e2714;
+    --green:#3fd0a0; --red:#ff7b84; --red-soft:#331f22;
+    --grad1:#1d6b54; --grad2:#134a3b; --on-accent:#241c08;
+    --header-shadow:rgba(0,0,0,.45); --accent-glow:rgba(224,178,74,.28); --accent-glow-strong:rgba(224,178,74,.5);
+    --input-focus-bg:#1a302a; --toast-bg:#eaf0ec; --toast-txt:#122420;
+    --danger-bg:#331f22; --danger-txt:#ff7b84; --warn-bg:#2e2914; --warn-line:#4a4223; --warn-txt:#e6c56a;
+    --inv-bg:#2b2a18; --inv-txt:#d7b56a;
+    --shadow:0 3px 14px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3); --shadow-lift:0 10px 30px rgba(0,0,0,.52);
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin:0; padding:0; background:var(--bg); color:var(--txt);
     font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -403,7 +463,7 @@
     border-radius:var(--r-md); box-shadow:var(--shadow); cursor:pointer; font-weight:600; }
   .fund-row.on { border-color:var(--accent); background:var(--accent-soft); }
   .fund-row .chk { width:24px; height:24px; border-radius:var(--r-xs); border:2px solid var(--line); display:grid; place-items:center;
-    color:#fff; font-size:14px; flex:0 0 auto; }
+    color:var(--on-accent); font-size:14px; flex:0 0 auto; }
   .fund-row.on .chk { background:var(--accent); border-color:var(--accent); }
   .amt-clear-wrap { text-align:center; min-height:22px; margin-bottom:2px; }
   .amt-clear { color:var(--muted); font-size:12.5px; font-weight:600; padding:3px 11px; border-radius:var(--r-xs); background:var(--card2); }
@@ -432,7 +492,7 @@
   .small-note { font-size:12.5px; color:var(--muted); line-height:1.5; }
   .chips { display:flex; gap:8px; flex-wrap:wrap; }
   .chip { padding:9px 15px; border-radius:999px; background:var(--card); border:1.5px solid var(--line); color:var(--muted); font-size:14px; font-weight:600; }
-  .chip.active { background:var(--accent); color:#fff; border-color:transparent; }
+  .chip.active { background:var(--accent); color:var(--on-accent); border-color:transparent; }
   .warn-box { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-txt); border-radius:var(--r-md); padding:10px 13px; font-size:13px; margin-bottom:12px; }
   .info-line { background:var(--accent-soft); color:var(--accent-d); border-radius:var(--r-md); padding:10px 13px; font-size:13px; margin:8px 0; font-weight:600; }
   .notice-btn { flex:0 0 auto; background:var(--red); color:#fff; border-radius:var(--r-sm); padding:8px 13px; font-size:12.5px; font-weight:700; white-space:nowrap; }
@@ -623,6 +683,8 @@ function normalize() {
   state.debtBudget = state.debtBudget || 0;
   state.overAllocBaseline = state.overAllocBaseline || 0;
   state.rev = +state.rev || 0;   // ревизия данных (wall-clock) для синхронизации — побеждает более позднее изменение
+  state.rateHistory = (state.rateHistory && typeof state.rateHistory==='object') ? state.rateHistory : {};
+  { const rk=Object.keys(state.rateHistory).sort(); if(rk.length>800) for(const k of rk.slice(0,rk.length-800)) delete state.rateHistory[k]; }
   // H3: санитайзинг иконок/цветов (импорт/бэкап могут содержать HTML → stored XSS). Всё, что рендерится сырым, чистим здесь.
   const cleanColor=(c,def)=>/^#[0-9a-fA-F]{3,8}$/.test(String(c||''))?c:def;
   const cleanIcon=(s,def)=>{ s=String(s==null?'':s); return (/[<>&"']/.test(s)||s.length>6)?def:(s||def); };
@@ -730,6 +792,12 @@ const round2 = n => Math.round((n+Number.EPSILON)*100)/100;
 function fmt(amount, code) { const c=cur(code); const n=round2(amount);
   return `${n.toLocaleString('ru-RU',{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2})} ${c.symbol}`; }
 const toBase = (amount,code) => amount * cur(code).rate;
+// Исторические курсы: курс валюты (база за 1 единицу) на дату — по ближайшему снимку ≤ даты, иначе текущий.
+function rateAt(code, date){ if(code===state.baseCurrency) return 1; const h=state.rateHistory||{}; let best=null;
+  for(const d in h){ if(d<=date && (best===null||d>best)) best=d; }
+  if(best!==null && h[best] && h[best][code]>0) return h[best][code];
+  const c=cur(code); return (c&&c.rate)||1; }
+const toBaseAt = (amount, code, date) => amount * rateAt(code, date);
 const fmtBase = amount => fmt(amount, state.baseCurrency);
 // Перевод суммы из одной валюты в другую по заданным курсам
 const convert = (amount, from, to) => from===to ? round2(amount) : round2(amount * cur(from).rate / cur(to).rate);
@@ -1032,15 +1100,15 @@ function renderOpsList(){
 let analysisKind='expense', analysisSort='amount';
 function lastMonths(n){ const arr=[]; let [y,m]=viewMonth.split('-').map(Number); for(let i=0;i<n;i++){ arr.unshift(`${y}-${String(m).padStart(2,'0')}`); m--; if(m<1){m=12;y--;} } return arr; }
 function monthlyTotals(ym){ const mt=state.transactions.filter(t=>t.date.slice(0,7)===ym);
-  return { inc:mt.filter(t=>t.type==='income').reduce((s,t)=>s+toBase(t.amount,t.currency),0),
-           exp:mt.filter(t=>t.type==='expense').reduce((s,t)=>s+toBase(t.amount,t.currency),0) }; }
+  return { inc:mt.filter(t=>t.type==='income').reduce((s,t)=>s+toBaseAt(t.amount,t.currency,t.date),0),
+           exp:mt.filter(t=>t.type==='expense').reduce((s,t)=>s+toBaseAt(t.amount,t.currency,t.date),0) }; }
 function daysInMonth(ym){ const [y,m]=ym.split('-').map(Number); return new Date(y,m,0).getDate(); }
 function daysLeftInMonth(){ const now=new Date(); const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(); return Math.max(1, dim-now.getDate()+1); }
 function gotoMonth(ym){ viewMonth=ym; render(); }
 function setAnalysisKind(k){ analysisKind=k; renderAnalysis(); }
 function setAnalysisSort(s){ analysisSort=s; renderAnalysis(); }
 // Чистый капитал (сумма всех счетов, кроме исключённых) на конец указанного дня, в базовой валюте.
-// Пересчёт по текущим курсам — исторические курсы не храним.
+// Пересчёт по курсу НА ту дату (rateAt), если есть снимок; иначе по текущему.
 function netWorthAt(cutoff){
   const bal={};
   const add=(id,c,d)=>{ if(!id||!c) return; (bal[id] ||= {}); bal[id][c]=round2((bal[id][c]||0)+d); };
@@ -1052,7 +1120,7 @@ function netWorthAt(cutoff){
     else if (t.type==='adjust') { add(t.accountId,t.currency,t.amount); }
   }
   let sum=0;
-  for (const a of state.accounts){ if(a.excluded) continue; const m=bal[a.id]||{}; for(const [c,v] of Object.entries(m)) sum+=toBase(v,c); }
+  for (const a of state.accounts){ if(a.excluded) continue; const m=bal[a.id]||{}; for(const [c,v] of Object.entries(m)) sum+=toBaseAt(v,c,cutoff); }
   return round2(sum);
 }
 function netWorthChartSVG(pts){
@@ -1091,7 +1159,7 @@ function insightsCard(){
   }
   // Категория заметно выше своего среднего за 3 месяца
   const prev3=lastMonths(4).slice(0,3);
-  const catSpent=ym2=>{ const m={}; state.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===ym2).forEach(t=>{ for(const p of txParts(t)){ m[p.categoryId]=(m[p.categoryId]||0)+toBase(p.amount,t.currency); } }); return m; };
+  const catSpent=ym2=>{ const m={}; state.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===ym2).forEach(t=>{ for(const p of txParts(t)){ m[p.categoryId]=(m[p.categoryId]||0)+toBaseAt(p.amount,t.currency,t.date); } }); return m; };
   const curM=catSpent(ym), hist=prev3.map(catSpent); let best=null;
   Object.keys(curM).forEach(cid=>{ const c=catById(cid); if(!c) return; const avg=hist.reduce((s,h)=>s+(h[cid]||0),0)/3, now=curM[cid];
     if(avg>0.5 && now>avg*1.3){ const dev=now-avg; if(!best||dev>best.dev) best={now,avg,dev,c}; } });
@@ -1140,7 +1208,7 @@ function renderAnalysis() {
   const budgets=(()=>{ if(analysisKind!=='expense')return'';
     // P8: лимиты категорий берём из единого инструмента «Лимиты и наблюдение» (watchlists типа category).
     const lim=state.watchlists.filter(w=>w.type==='category'&&w.target>0).map(w=>({c:catById(w.value),limit:round2(w.target)})).filter(x=>x.c); if(!lim.length)return'';
-    const spent={}; monthTx().filter(t=>t.type==='expense').forEach(t=>{ for(const p of txParts(t)){ spent[p.categoryId]=round2((spent[p.categoryId]||0)+toBase(p.amount,t.currency)); } });
+    const spent={}; monthTx().filter(t=>t.type==='expense').forEach(t=>{ for(const p of txParts(t)){ spent[p.categoryId]=round2((spent[p.categoryId]||0)+toBaseAt(p.amount,t.currency,t.date)); } });
     const rows=lim.map(({c,limit})=>{ const s=spent[c.id]||0, pct=limit>0?Math.min(100,Math.round(s/limit*100)):0, over=s>limit+0.005;
       const col=over?'var(--red)':pct>=80?'var(--warn-txt)':'var(--green)';
       return `<div class="cat-line"><div class="ci" style="background:${c.color}">${c.icon}</div>
@@ -1152,7 +1220,7 @@ function renderAnalysis() {
       <div class="small-note" style="margin-top:4px">Справа — остаток лимита; красное со знаком «−» — перерасход.</div></div>`; })();
   const extra=comparison+budgets;
   const mt=monthTx().filter(t=>t.type===analysisKind);
-  const agg={}; for (const t of mt){ for(const p of txParts(t)){ const k=p.categoryId||'_none'; (agg[k] ||= {value:0,count:0}); agg[k].value=round2(agg[k].value+toBase(p.amount,t.currency)); agg[k].count++; } }
+  const agg={}; for (const t of mt){ for(const p of txParts(t)){ const k=p.categoryId||'_none'; (agg[k] ||= {value:0,count:0}); agg[k].value=round2(agg[k].value+toBaseAt(p.amount,t.currency,t.date)); agg[k].count++; } }
   const entries=Object.entries(agg).filter(([,v])=>v.value>0.005).map(([id,v])=>{ const c=id==='_none'?null:catById(id);
     return {id, name:c?c.name:'Без категории', icon:c?c.icon:'❓', color:c?c.color:'#94a3b8', value:v.value, count:v.count}; })
     .sort((a,b)=> analysisSort==='count'?b.count-a.count:b.value-a.value);
@@ -1178,12 +1246,12 @@ function renderAnalysis() {
     <button class="${analysisSort==='count'?'active':''}" onclick="setAnalysisSort('count')">По числу операций</button></div>`;
   // По дням недели
   const wd=[0,0,0,0,0,0,0]; const WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  mt.forEach(t=>{ const [y,m,d]=t.date.split('-').map(Number); let g=(new Date(y,m-1,d).getDay()+6)%7; wd[g]=round2(wd[g]+toBase(t.amount,t.currency)); });
+  mt.forEach(t=>{ const [y,m,d]=t.date.split('-').map(Number); let g=(new Date(y,m-1,d).getDay()+6)%7; wd[g]=round2(wd[g]+toBaseAt(t.amount,t.currency,t.date)); });
   const wdMax=Math.max(1,...wd);
   const weekdayCard=`<div class="card"><div class="section-title" style="margin:0 0 6px">По дням недели</div>
     <div class="mchart" style="height:96px">${wd.map((v,i)=>`<div class="mcol"><div class="mbars"><i class="mb ${analysisKind==='income'?'inc':'exp'}" style="height:${Math.max(2,Math.round(v/wdMax*100))}%;width:62%;max-width:22px"></i></div><div class="mlab">${WD[i]}</div></div>`).join('')}</div></div>`;
   // Топ-5 крупных
-  const top=mt.slice().sort((a,b)=>toBase(b.amount,b.currency)-toBase(a.amount,a.currency)).slice(0,5);
+  const top=mt.slice().sort((a,b)=>toBaseAt(b.amount,b.currency,b.date)-toBaseAt(a.amount,a.currency,a.date)).slice(0,5);
   const top5Card=`<div class="card"><div class="section-title" style="margin:0 0 4px">Топ-5 крупных ${analysisKind==='income'?'поступлений':'трат'}</div>${top.map(opRow).join('')}</div>`;
   el.innerHTML = seg+insCard+chart+nwCard+cashflowCard+summary+extra+`<div class="card"><div class="donut-wrap">${donutSVG(entries,total)}</div></div><div class="card">${sortToggle}${lines}</div>`+weekdayCard+top5Card;
 }
@@ -1192,7 +1260,7 @@ function openCatOps(catId){
   const matchPart=p=>(catId==='_none'?!p.categoryId:p.categoryId===catId);
   const list=monthTx().filter(t=>t.type===kind && txParts(t).some(matchPart)).sort(byDateDesc);
   const c=catId==='_none'?null:catById(catId);
-  const total=list.reduce((s,t)=>s+txParts(t).filter(matchPart).reduce((ss,p)=>ss+toBase(p.amount,t.currency),0),0);
+  const total=list.reduce((s,t)=>s+txParts(t).filter(matchPart).reduce((ss,p)=>ss+toBaseAt(p.amount,t.currency,t.date),0),0);
   openSheet(`<h2>${c?c.icon+' '+esc(c.name):'❓ Без категории'}</h2>
     <div class="small-note" style="margin-bottom:8px">${monthLabel(viewMonth)} · ${list.length} оп. · ${fmtBase(total)}</div>
     ${list.map(opRow).join('')||'<div class="empty">Нет операций</div>'}`);
@@ -2122,7 +2190,7 @@ function toggleRecurring(id){ const r=state.recurring.find(x=>x.id===id); if(!r)
 function autoPostDueRecurring(){ let n=0; state.recurring.filter(r=>r.auto&&r.active!==false&&acc(r.accountId)).forEach(r=>{ n+=_postRecurring(r); }); if(n) save(); return n; }
 
 /* ---------- Календарь платежей (предстоящие обязательства) ---------- */
-function renderPayCalendar(el){
+function payAgendaItems(){
   const today=todayISO(); const ym=today.slice(0,7); const nextYm=ymNext(ym); const todayD=+today.slice(8,10);
   const items=[];
   for(const r of state.recurring){ if(r.active===false) continue;
@@ -2134,6 +2202,10 @@ function renderPayCalendar(el){
     items.push({date:d.dueDate, kind:'debt', id:d.id, type:d.direction==='iowe'?'expense':'income', amount:rem, currency:d.currency,
       title:(d.direction==='iowe'?'Вернуть долг · ':'Ждут возврат · ')+(d.counterparty||'—')}); }
   items.sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+  return items;
+}
+function renderPayCalendar(el){
+  const today=todayISO(); const ym=today.slice(0,7); const items=payAgendaItems();
   const overdue=items.filter(i=>i.date<today), upcoming=items.filter(i=>i.date>=today);
   const monExp=round2(upcoming.filter(i=>i.type==='expense'&&i.date.slice(0,7)===ym).reduce((s,i)=>s+toBase(i.amount,i.currency),0));
   const monInc=round2(upcoming.filter(i=>i.type==='income'&&i.date.slice(0,7)===ym).reduce((s,i)=>s+toBase(i.amount,i.currency),0));
@@ -2436,6 +2508,7 @@ async function updateRates() {
       if(per>0){ c.rate=Math.round((1/per)*10000)/10000; n++; }   // база за 1 единицу c.code
       else missing.push(c.code);
     });
+    (state.rateHistory ||= {})[todayISO()]=Object.fromEntries(state.currencies.map(c=>[c.code, c.rate]));   // снимок курсов на сегодня для исторической аналитики
     state.ratesUpdated=new Date().toISOString(); save();
     toast(n ? `Курсы обновлены${missing.length?` · без ${missing.join(', ')}`:''} ✓` : 'Не нашлось валют для обновления');
     if (currentTab==='more' && moreView==='currencies') renderMore();
@@ -2936,8 +3009,8 @@ function debtPayoffCard(){
    ================================================================= */
 function txTags(t){ if(!t||!t.note) return []; const out=[]; const re=/#([\p{L}\p{N}_]+)/gu; let m; while((m=re.exec(t.note))) out.push(m[1].toLowerCase()); return [...new Set(out)]; }
 function watchSpent(w, ym){ const list=state.transactions.filter(t=>t.date.slice(0,7)===ym && t.type==='expense');
-  if(w.type==='category') return list.reduce((s,t)=>{ for(const p of txParts(t)){ if(p.categoryId===w.value) s=s+toBase(p.amount,t.currency); } return s; },0);
-  return list.filter(t=>txTags(t).includes(w.value)).reduce((s,t)=>s+toBase(t.amount,t.currency),0); }
+  if(w.type==='category') return list.reduce((s,t)=>{ for(const p of txParts(t)){ if(p.categoryId===w.value) s=s+toBaseAt(p.amount,t.currency,t.date); } return s; },0);
+  return list.filter(t=>txTags(t).includes(w.value)).reduce((s,t)=>s+toBaseAt(t.amount,t.currency,t.date),0); }
 function renderWatch(el){
   const curYm=todayISO().slice(0,7); const useYm=viewMonth;
   const months=[]; { let [y,m]=curYm.split('-').map(Number); for(let i=0;i<3;i++){ m--; if(m<1){m=12;y--;} months.unshift(`${y}-${String(m).padStart(2,'0')}`); } }
@@ -3006,10 +3079,14 @@ const THEMES = [
   {id:'dark',     name:'Тёмная',  hint:'графит',            sw:['#14161c','#3ec7b8','#e7eaf0']},
   {id:'midnight', name:'Полночь', hint:'индиго',            sw:['#0f1226','#6c8cff','#e6e9f7']},
   {id:'sepia',    name:'Сепия',   hint:'тёплая бумага',     sw:['#f3ece0','#c8794a','#43382a']},
-  {id:'ocean',    name:'Океан',   hint:'прохладный синий',  sw:['#eef4f8','#2f8fd6','#23323f']}
+  {id:'ocean',    name:'Океан',   hint:'прохладный синий',  sw:['#eef4f8','#2f8fd6','#23323f']},
+  {id:'monarch',  name:'Монарх',  hint:'синий + коралл',    sw:['#0e1424','#ff6a5d','#e8ebf7']},
+  {id:'charcoal', name:'Уголь',   hint:'чёрный + лайм',     sw:['#0c0e10','#b6e34b','#e9edea']},
+  {id:'amethyst', name:'Аметист', hint:'фиолетовый',        sw:['#15102a','#a06bff','#ece8fb']},
+  {id:'emerald',  name:'Изумруд', hint:'зелёный + золото',  sw:['#0b1512','#e0b24a','#e6f0ea']}
 ];
 // Цвет строки состояния (мета theme-color) = верхний тон шапки каждой темы
-const THEME_META = { light:'#46c4b6', dark:'#2f9e91', midnight:'#6c8cff', sepia:'#d08a53', ocean:'#3aa0e0' };
+const THEME_META = { light:'#46c4b6', dark:'#2f9e91', midnight:'#6c8cff', sepia:'#d08a53', ocean:'#3aa0e0', monarch:'#ff7a5e', charcoal:'#242a30', amethyst:'#8a5cff', emerald:'#1d6b54' };
 function effectiveTheme(id){ return id==='auto' ? ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light') : id; }
 function getTheme(){ try{ return localStorage.getItem('konverty_theme') || 'auto'; }catch(e){ return 'auto'; } }
 function applyTheme(){ const eff=effectiveTheme(getTheme());
@@ -3091,11 +3168,15 @@ function fireDueNotification(force){
   if(!notifyEnabled() || !notifyGranted()) return;
   const today=todayISO();
   if(!force){ try{ if(localStorage.getItem(NOTIFY_LAST)===today) return; }catch(e){} }
-  const due=dueRecurring().filter(r=>!r.auto);
+  const items=payAgendaItems();
+  const duePay=items.filter(i=>i.type==='expense' && i.date<=today);              // к оплате: просрочено + сегодня
+  const tmr=(()=>{ const d=new Date(today+'T00:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
+  const soon=items.filter(i=>i.type==='expense' && i.date===tmr);                 // завтра
   const {envBal}=computeBalances();
   const negEnv=activeEnvelopes().map(e=>({e,base:envelopeBase(envBal,e.id)})).filter(x=>x.base<-0.5);
   const parts=[];
-  if(due.length) parts.push(`Пора внести ${due.length} ${plural(due.length,'платёж','платежа','платежей')}`);
+  if(duePay.length){ const sum=round2(duePay.reduce((s,i)=>s+toBase(i.amount,i.currency),0)); parts.push(`К оплате: ${duePay.length} на ${fmtBase(sum)}`); }
+  if(soon.length) parts.push(`Завтра: ${soon.length} ${plural(soon.length,'платёж','платежа','платежей')}`);
   if(negEnv.length) parts.push(`${negEnv.length} ${plural(negEnv.length,'конверт в минусе','конверта в минусе','конвертов в минусе')}`);
   if(!parts.length){ if(force) toast('Сейчас напоминать не о чем 👍'); return; }
   showNotify('Конверты — напоминание', parts.join(' · '));
@@ -3181,10 +3262,12 @@ try { if(!syncConfigured()) autoN=autoPostDueRecurring(); switchTab('ops'); }   
 catch(err){ console.error('render error', err);
   try{ const o=document.getElementById('screen-ops'); if(o) o.innerHTML='<div class="empty"><div class="big">⚠️</div>Не удалось отобразить данные. Открой «Ещё → Резервные копии», чтобы восстановить последнюю копию, либо «Экспорт», чтобы сохранить файл.</div>'; }catch(e){} }
 ensurePersist(); dailyBackup(); syncOnLoad();
+try{ const _t=todayISO(); state.rateHistory ||= {}; if(!state.rateHistory[_t]){ state.rateHistory[_t]=Object.fromEntries(state.currencies.map(c=>[c.code, c.rate])); save(); } }catch(e){}   // ежедневный снимок курсов
 if (autoN) setTimeout(()=>toast(`Автоматически проведено: ${autoN}`), 1100);
 // Онбординг только для новой установки; существующему пользователю тихо ставим флаг.
 try{ if(!localStorage.getItem(ONB_KEY)){ if(state.transactions.length===0) setTimeout(showOnboarding, 950); else localStorage.setItem(ONB_KEY,'1'); } }catch(e){}
 setTimeout(()=>fireDueNotification(false), 1600);   // напоминания при запуске (если включены)
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(()=>fireDueNotification(false), 300); });   // и при возврате в приложение (не чаще раза в день)
 if ('serviceWorker' in navigator) window.addEventListener('load', ()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 </script>
 </body>
