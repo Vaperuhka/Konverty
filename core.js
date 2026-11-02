@@ -174,3 +174,13 @@ function computeIncome(amount, mainAccountId) {
   accountCredits[mainAccountId] = { amt:remainder, cur:mainCur };
   return { accountCredits, distribution: distribute(remainder), distCurrency:mainCur, remainder, offTop, mainCur };
 }
+
+// Экспорт для не-браузерных сред (Deno/Node) — чтобы тесты могли дотянуться до функций.
+// В браузере есть globalThis.document → блок пропускается, на приложение не влияет.
+if (typeof globalThis.document === 'undefined') {
+  globalThis.KonvertyCore = { cur, round2, fmt, toBase, rateAt, toBaseAt, fmtBase, convert, accCur, acc, env, catById,
+    txParts, activeAccounts, spendableAccounts, investmentAccounts, activeEnvelopes,
+    _computeBalances, computeBalances, sumBase, accountBase, envelopeBase, owedBase, totalNet, spendableTotal,
+    envelopesTotal, totalOwed, goalsReservedBase, committedEnvelopes, freeMoney, unallocated,
+    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome };
+}
