@@ -309,6 +309,7 @@
   .h-free .hf { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.16); border-radius:var(--r-md); padding:8px 13px; min-height:var(--tap); font-size:12.5px; cursor:pointer; }
   .h-free .hf b { font-size:13.5px; font-weight:800; }
   .h-free .hf:active { background:rgba(255,255,255,.26); }
+  .h-free .hf:focus-visible { outline:2px solid #fff; outline-offset:2px; }
 
   main { padding:14px; max-width:640px; margin:0 auto; }
   .screen { display:none; } .screen.active { display:block; animation:fade .22s ease; }
@@ -403,6 +404,8 @@
   .btn.sec { background:var(--card2); color:var(--txt); box-shadow:none; }
   .btn.danger { background:var(--danger-bg); color:var(--danger-txt); box-shadow:none; }
   .btn.small { padding:9px 13px; font-size:13.5px; width:auto; min-height:0; box-shadow:none; }
+  /* В плотных рядах действий (мультивыбор, «Пора внести») поднимаем тап-цель до 44px — a11y */
+  .sel-bar .btn.small, .due-top .btn.small, .due-row .btn.small { min-height:var(--tap); }
   .btn-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 
   /* Account & envelope rows */
@@ -793,6 +796,8 @@
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
 
+<!-- Денежное ядро (валюты, балансы, распределение дохода) — единый источник для index.html и tests.html. Грузится ПЕРЕД основным скриптом. -->
+<script src="core.js"></script>
 <script>
 "use strict";
 /* =================================================================
@@ -863,10 +868,14 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='0.17.1';  // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
+const APP_VERSION='0.19.0';  // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
 const BUILD='2026-11-02';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
-  try { const raw = localStorage.getItem(LS_KEY); if (raw) { state = JSON.parse(raw); normalize(); return; } } catch(e){ console.warn(e); }
+  let raw=null;
+  try { raw = localStorage.getItem(LS_KEY); if (raw) { state = JSON.parse(raw); normalize(); return; } } catch(e){ console.warn(e);
+    // Данные были, но повреждены — сохраняем сырой слепок под отдельный ключ, чтобы не потерять без следа при сбросе к дефолту.
+    try { if(raw) localStorage.setItem(LS_KEY+'_corrupt_'+Date.now(), raw); } catch(_){}
+  }
   state = defaultState(); save();
 }
 function normalize() {
@@ -919,6 +928,12 @@ function normalize() {
     t.splits = t.splits.map(s=>({ categoryId:(s.categoryId&&catById(s.categoryId))?s.categoryId:null, envelopeId:(s.envelopeId&&env(s.envelopeId))?s.envelopeId:null, amount:Math.max(0,round2(s.amount||0)) })).filter(s=>s.amount>0);
     if(t.splits.length<2) delete t.splits;
   }});
+  // Защита от Infinity/NaN из импорта: нечисловые/бесконечные суммы → 0 (иначе «∞» в балансах).
+  { const fin=n=>{ n=+n; return isFinite(n)?n:0; };
+    state.transactions.forEach(t=>{ if(t.amount!=null) t.amount=fin(t.amount); if(t.fromAmount!=null) t.fromAmount=fin(t.fromAmount); if(t.toAmount!=null) t.toAmount=fin(t.toAmount);
+      if(t.distribution) for(const k in t.distribution) t.distribution[k]=fin(t.distribution[k]);
+      if(t.plan) for(const k in t.plan) t.plan[k]=fin(t.plan[k]);
+      if(t.accountCredits) for(const k in t.accountCredits){ const cr=t.accountCredits[k]; if(typeof cr==='number') t.accountCredits[k]=fin(cr); else if(cr&&typeof cr==='object') cr.amt=fin(cr.amt); } }); }
   migrateCategories();
 }
 function migrateCategories() {
@@ -1002,162 +1017,12 @@ function renderBackups(el){
       : '<div class="empty">Пока нет копий</div>'; });
 }
 
-/* ---------- Деньги / валюты ---------- */
-const cur = code => state.currencies.find(c=>c.code===code) || {code,symbol:code,rate:1};
-const round2 = n => Math.round((n+Number.EPSILON)*100)/100;
-function fmt(amount, code) { const c=cur(code); const n=round2(amount);
-  return `${n.toLocaleString('ru-RU',{minimumFractionDigits:(n%1?2:0),maximumFractionDigits:2})} ${c.symbol}`; }
-const toBase = (amount,code) => amount * cur(code).rate;
-// Исторические курсы: курс валюты (база за 1 единицу) на дату — по ближайшему снимку ≤ даты, иначе текущий.
-function rateAt(code, date){ if(code===state.baseCurrency) return 1; const h=state.rateHistory||{}; let best=null;
-  for(const d in h){ if(d<=date && (best===null||d>best)) best=d; }
-  if(best!==null && h[best] && h[best][code]>0) return h[best][code];
-  const c=cur(code); return (c&&c.rate)||1; }
-const toBaseAt = (amount, code, date) => amount * rateAt(code, date);
-const fmtBase = amount => fmt(amount, state.baseCurrency);
-// Перевод суммы из одной валюты в другую по заданным курсам
-const convert = (amount, from, to) => from===to ? round2(amount) : round2(amount * cur(from).rate / cur(to).rate);
-const accCur = id => acc(id)?.currency || state.baseCurrency;
+/* ---------- Деньги / валюты + Балансы + Распределение дохода ---------- */
+// Перенесено в core.js (0.19.0) — единый источник расчётов, тестируется в tests.html.
+// core.js грузится ПЕРЕД этим скриптом; объявления (cur/round2/convert/acc/env/
+// _computeBalances/computeBalances/distribute/computeIncome/… ) живут в общем
+// глобальном scope страницы и используются здесь как раньше.
 
-const acc = id => state.accounts.find(a=>a.id===id);
-const env = id => state.envelopes.find(e=>e.id===id);
-const catById = id => state.categories.find(c=>c.id===id);
-// Части расхода по категориям/конвертам: split-операция даёт свои части, обычная — одну.
-const txParts = t => (t.type==='expense' && Array.isArray(t.splits) && t.splits.length) ? t.splits : [{categoryId:t.categoryId, envelopeId:t.envelopeId, amount:t.amount}];
-const activeAccounts = () => state.accounts.filter(a=>!a.archived);
-const spendableAccounts = () => activeAccounts().filter(a=>!a.investment && !a.excluded);
-const investmentAccounts = () => activeAccounts().filter(a=>a.investment);
-const activeEnvelopes = () => state.envelopes.filter(e=>!e.archived);
-
-/* ---------- Балансы ---------- */
-function _computeBalances() {
-  const envBal={}, accBal={}, owedBal={};
-  state.envelopes.forEach(e=>{ envBal[e.id]={}; owedBal[e.id]={}; }); state.accounts.forEach(a=>accBal[a.id]={});
-  const addEnv=(id,c,delta)=>{ (envBal[id] ||= {}); envBal[id][c]=round2((envBal[id][c]||0)+delta); };
-  const addAcc=(id,c,delta)=>{ (accBal[id] ||= {}); accBal[id][c]=round2((accBal[id][c]||0)+delta); };
-  const addOwed=(id,c,delta)=>{ (owedBal[id] ||= {}); owedBal[id][c]=round2((owedBal[id][c]||0)+delta); };
-  for (const t of state.transactions) {
-    if (t.type==='income') {
-      // accountCredits: {id:{amt,cur}} (новый формат) или {id:число} (старый)
-      if (t.accountCredits) for (const [id,cr] of Object.entries(t.accountCredits)) {
-        if (typeof cr==='number') addAcc(id,t.currency,cr); else addAcc(id,cr.cur,cr.amt);
-      }
-      if (t.distribution) for (const [id,amt] of Object.entries(t.distribution)) addEnv(id,t.currency,amt);
-      // Долг конвертам = запланировано (plan) минус фактически оплачено (distribution)
-      if (t.plan) for (const [id,p] of Object.entries(t.plan)) {
-        const d=(t.distribution&&t.distribution[id])||0, short=round2(p-d);
-        if (Math.abs(short)>0.005) addOwed(id,t.currency,short);
-      }
-    } else if (t.type==='expense') {
-      if (t.accountId) addAcc(t.accountId,t.currency,-t.amount);
-      if (Array.isArray(t.splits) && t.splits.length) { for(const s of t.splits){ if(s.envelopeId) addEnv(s.envelopeId,t.currency,-s.amount); } }
-      else if (t.envelopeId) addEnv(t.envelopeId,t.currency,-t.amount);
-    } else if (t.type==='transfer') {
-      if (t.fromAmount!=null) { addAcc(t.fromAccountId,t.fromCurrency,-t.fromAmount); addAcc(t.toAccountId,t.toCurrency,t.toAmount); }
-      else { addAcc(t.fromAccountId,t.currency,-t.amount); addAcc(t.toAccountId,t.currency,t.amount); }
-    } else if (t.type==='envtransfer') {
-      addEnv(t.fromEnvelopeId,t.currency,-t.amount); addEnv(t.toEnvelopeId,t.currency,t.amount);
-    } else if (t.type==='envfund') {
-      // Пополнение конверта из свободных денег: бюджет конверта растёт, долг падает (счета не трогаем)
-      addEnv(t.envelopeId,t.currency,t.amount); addOwed(t.envelopeId,t.currency,-t.amount);
-    } else if (t.type==='adjust') {
-      // Корректировка баланса счёта (разница до нужной суммы), конверты не трогаем
-      addAcc(t.accountId,t.currency,t.amount);
-    } else if (t.type==='envadjust') {
-      // Корректировка суммы в конверте (счета не трогаем). Пополнение (+) гасит долг конверта, как envfund.
-      addEnv(t.envelopeId,t.currency,t.amount);
-      if (t.amount>0.005) addOwed(t.envelopeId,t.currency,-t.amount);
-    }
-  }
-  // Долги, привязанные к счёту: тело долга и возвраты реально двигают деньги на счёте.
-  // Это НЕ доход/расход (в аналитику не попадает) и конверты не трогает — только баланс счёта.
-  for (const d of state.debts) {
-    if (!d.accountId || !acc(d.accountId)) continue;
-    const sign = d.direction==='iowe' ? 1 : -1;   // мне дали в долг → +на счёт; я дал в долг → −со счёта
-    addAcc(d.accountId, accCur(d.accountId), sign * convert(d.amount, d.currency, accCur(d.accountId)));
-    for (const p of (d.payments||[])) {
-      const pa = (p.accountId && acc(p.accountId)) ? p.accountId : d.accountId;
-      addAcc(pa, accCur(pa), -sign * convert(p.amount, d.currency, accCur(pa)));   // возврат — в обратную сторону
-    }
-  }
-  return { envBal, accBal, owedBal };
-}
-// Мемоизация: пересчитываем балансы только когда данные менялись (save/import/reset двигают dataStamp).
-function computeBalances(){ if(_balCache && _balCacheAt===dataStamp) return _balCache; _balCache=_computeBalances(); _balCacheAt=dataStamp; return _balCache; }
-const sumBase = m => Object.entries(m||{}).reduce((s,[c,a])=>s+toBase(a,c),0);
-const accountBase = (accBal,id) => sumBase(accBal[id]);
-const envelopeBase = (envBal,id) => sumBase(envBal[id]);
-const owedBase = (owedBal,id) => sumBase(owedBal[id]);
-const totalNet = accBal => state.accounts.filter(a=>!a.excluded).reduce((s,a)=>s+accountBase(accBal,a.id),0);
-const spendableTotal = accBal => spendableAccounts().reduce((s,a)=>s+accountBase(accBal,a.id),0);
-const envelopesTotal = envBal => state.envelopes.reduce((s,e)=>s+envelopeBase(envBal,e.id),0);
-const totalOwed = owedBal => state.envelopes.reduce((s,e)=>s+(e.noOwe?0:Math.max(0,owedBase(owedBal,e.id))),0);
-// Пункт 5: деньги, отложенные в цели-накопления (в базовой валюте) — реально резервируются из свободных.
-// M2: привязанные к конверту цели НЕ вычитаем повторно — их деньги уже в конверте (committedEnvelopes).
-const goalsReservedBase = () => (state.goals||[]).filter(g=>!g.archived && !(g.envelopeId&&env(g.envelopeId))).reduce((s,g)=>s+toBase(g.saved||0, g.currency||state.baseCurrency),0);
-// H1/M3: закреплено в конвертах = сумма ТОЛЬКО положительных бюджетов (перерасход не считается «занятым», иначе минус конверта раздувал бы «Свободно»).
-const committedEnvelopes = envBal => state.envelopes.reduce((s,e)=>s+Math.max(0, envelopeBase(envBal,e.id)),0);
-// Единый источник «Свободно»: тратимые деньги − закреплённое в конвертах − резерв целей.
-const freeMoney = (accBal, envBal) => round2(spendableTotal(accBal) - committedEnvelopes(envBal) - goalsReservedBase());
-// «Не разложено по конвертам» (для уведомления на «Счета» и определения перекоса): без вычета целей.
-const unallocated = (accBal, envBal) => round2(spendableTotal(accBal) - committedEnvelopes(envBal));
-// Target: сколько РЕАЛЬНО пополнено в конверт за месяц ym (в базовой валюте) — учитываются все каналы пополнения,
-// кроме трат: распределение дохода (funded-часть), envfund, envtransfer (вход − выход), envadjust. Расходы прогресс не уменьшают.
-// Потрачено из конверта за месяц (в базовой валюте) — расходы, привязанные к конверту, включая части split.
-function envSpentInMonth(envId, ym){ let s=0;
-  for(const t of state.transactions){ if(t.type!=='expense'||(t.date||'').slice(0,7)!==ym) continue;
-    for(const p of txParts(t)){ if(p.envelopeId===envId) s+=toBase(p.amount, t.currency); } }
-  return round2(s); }
-function envFundedInMonth(envId, ym){ let s=0;
-  for(const t of state.transactions){ if((t.date||'').slice(0,7)!==ym) continue;
-    if(t.type==='income'){ if(t.distribution && t.distribution[envId]) s+=toBase(t.distribution[envId], t.currency); }
-    else if(t.type==='envfund'){ if(t.envelopeId===envId) s+=toBase(t.amount, t.currency); }
-    else if(t.type==='envadjust'){ if(t.envelopeId===envId) s+=toBase(t.amount, t.currency); }
-    else if(t.type==='envtransfer'){ if(t.toEnvelopeId===envId) s+=toBase(t.amount,t.currency); if(t.fromEnvelopeId===envId) s-=toBase(t.amount,t.currency); }
-  }
-  return round2(s); }
-// Этап 3: средний дневной расход за последние N дней (в базовой валюте).
-function avgDailySpendBase(days){ days=days||90; const c=new Date(); c.setDate(c.getDate()-days);
-  const cutISO=`${c.getFullYear()}-${String(c.getMonth()+1).padStart(2,'0')}-${String(c.getDate()).padStart(2,'0')}`;
-  const sum=state.transactions.filter(t=>t.type==='expense'&&t.date>=cutISO).reduce((s,t)=>s+toBase(t.amount,t.currency),0);
-  return sum>0? round2(sum/days) : 0; }
-
-/* ---------- Распределение дохода ---------- */
-function distribute(amount) {
-  const act = activeEnvelopes(); const dist={};
-  const totalW = act.reduce((s,e)=>s+(e.percent||0),0);
-  if (totalW>0 && act.length) {
-    let a=0;
-    act.forEach((e,i)=>{ let v = i===act.length-1 ? round2(amount-a) : round2(amount*(e.percent||0)/totalW); if(i<act.length-1) a=round2(a+v); dist[e.id]=v; });
-  } else if (act.length) dist[act[0].id]=round2(amount);
-  return dist;
-}
-// Доход: off-top на инвест-счета, остаток на выбранный счёт + распределение по конвертам
-function computeIncome(amount, mainAccountId) {
-  const main = acc(mainAccountId);
-  const mainCur = main?.currency || state.baseCurrency;
-  if (main && main.investment) {
-    // Прямое пополнение инвест-счёта (например проценты Binance) — без off-top и без конвертов
-    return { accountCredits:{[mainAccountId]:{amt:round2(amount),cur:mainCur}}, distribution:{}, distCurrency:mainCur, remainder:0, offTop:{}, mainCur };
-  }
-  // Доход в валюте основного счёта. Off-top на инвест-счета — с конвертацией в их валюту.
-  const offTop={}; let offSumMain=0;
-  investmentAccounts().forEach(a=>{ if(a.offTopPercent>0 && !a.excluded){
-    const amtMain = round2(amount*a.offTopPercent/100);          // в валюте дохода
-    offTop[a.id] = { amtMain, amt: convert(amtMain, mainCur, a.currency), cur: a.currency };
-    offSumMain += amtMain;
-  }});
-  // Защита: суммарный off-top не может превышать доход (несколько инвест-счетов >100%) — масштабируем вниз.
-  if (offSumMain>amount && offSumMain>0){ const k=amount/offSumMain;
-    for (const o of Object.values(offTop)){ o.amtMain=round2(o.amtMain*k); o.amt=convert(o.amtMain, mainCur, o.cur); }
-    offSumMain=amount;
-  }
-  const remainder = round2(Math.max(0, amount - offSumMain));    // в валюте дохода
-  const accountCredits = {};
-  for (const [id,o] of Object.entries(offTop)) accountCredits[id] = { amt:o.amt, cur:o.cur };
-  accountCredits[mainAccountId] = { amt:remainder, cur:mainCur };
-  return { accountCredits, distribution: distribute(remainder), distCurrency:mainCur, remainder, offTop, mainCur };
-}
 
 /* =================================================================
    Навигация + период
@@ -1211,7 +1076,7 @@ function render() {
     const free=freeMoney(accBal,envBal);
     const allow=round2(Math.max(0,free)/daysLeftInMonth());
     hfree.style.display='block';
-    hfree.innerHTML=`<span class="hf" onclick="switchTab('accounts')">💼 Свободно: <b>${fmtBase(free)}</b></span> <span class="hf" onclick="switchTab('more');openMore('plan')">📅 Сегодня ~<b>${fmtBase(allow)}</b></span>`;
+    hfree.innerHTML=`<span class="hf" role="button" tabindex="0" onclick="switchTab('accounts')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">💼 Свободно: <b>${fmtBase(free)}</b></span> <span class="hf" role="button" tabindex="0" onclick="switchTab('more');openMore('plan')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">📅 Сегодня ~<b>${fmtBase(allow)}</b></span>`;
   } else hfree.style.display='none';
   if (currentTab==='ops') renderOps();
   else if (currentTab==='analysis') renderAnalysis();
@@ -2327,9 +2192,10 @@ function renderEntry() {
     }
   } else {
     const cats=state.categories.filter(c=>c.kind==='expense');
-    // Быстрый доступ к частым категориям прямо под суммой: избранные (⭐), иначе — первые несколько.
+    // Быстрый доступ к частым категориям прямо под суммой: избранные (⭐), иначе — первые 6, но только если список длинный
+    // (если категорий ≤6 и избранных нет — сетка ниже и так короткая, быстрый ряд был бы дублем).
     const favCats=cats.filter(c=>c.fav);
-    const quickCats=(favCats.length?favCats:cats).slice(0,6);
+    const quickCats=favCats.length ? favCats : (cats.length>6 ? cats.slice(0,6) : []);
     if (quickCats.length) preKeypad=`<div class="chips-row quick-cat">${quickCats.map(c=>`<button class="echip ${c.id===e.categoryId?'active':''}" aria-pressed="${c.id===e.categoryId}" onclick="entry.categoryId='${c.id}';renderEntry()">${c.icon} ${esc(c.name)}</button>`).join('')}</div>`;
     const a=acc(e.accountId); const code=accCur(e.accountId); const {accBal}=computeBalances(); const have=(accBal[e.accountId]||{})[code]||0;
     mid=`<div class="small-note" style="margin:6px 2px 0">Счёт списания (${code}) · в нём ${fmt(have,code)}<span class="exp-insuff red">${amtNum>have?' (не хватает)':''}</span></div>
@@ -2509,7 +2375,9 @@ function saveEntry() {
       const selIds=activeEnvelopes().filter(v=>e.eqSel[v.id]).map(v=>v.id);
       const distribution={};
       if (selIds.length){ const each=round2(remainder/selIds.length); let acc2=0;
-        selIds.forEach((id,i)=>{ const val = i===selIds.length-1 ? round2(remainder-acc2) : each; distribution[id]=val; acc2=round2(acc2+val); }); }
+        selIds.forEach((id,i)=>{ const val = i===selIds.length-1 ? round2(remainder-acc2) : each; distribution[id]=val; acc2=round2(acc2+val); });
+        const lastId=selIds[selIds.length-1];   // та же защита от отрицательной доли последнего при округлении
+        if(distribution[lastId]<0){ const need=round2(-distribution[lastId]); distribution[lastId]=0; let bigId=selIds[0]; for(const id of selIds) if(distribution[id]>distribution[bigId]) bigId=id; distribution[bigId]=round2(distribution[bigId]-need); } }
       tx={id:uid(),type:'income',date:e.date,currency:distCurrency,amount:amt,categoryId:e.categoryId,note:e.note,accountCredits,plan:distribution,distribution};
     } else {
       // H4: если правим существующий доход и сумма+счёт не изменились — сохраняем ИСХОДНУЮ раскладку

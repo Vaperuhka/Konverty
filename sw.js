@@ -1,9 +1,10 @@
 // Service worker — офлайн-кэш приложения.
 // Данные пользователя хранятся в localStorage (не здесь), кэшируется только код приложения.
-const CACHE = 'konverty-0.17.1';
+const CACHE = 'konverty-0.19.0';
 const ASSETS = [
   './',
   './index.html',
+  './core.js',
   './manifest.webmanifest',
   './icon.svg'
 ];
@@ -23,6 +24,10 @@ self.addEventListener('activate', (e) => {
 // Стратегия: сначала сеть (чтобы получать обновления), при офлайне — из кэша.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Кэшируем только свой origin (код приложения). Кросс-доменные GET (api.github.com для синка, курсы валют)
+  // НЕ кэшируем — иначе офлайн отдаёт устаревшие данные синхронизации и засоряется хранилище.
+  const sameOrigin = new URL(e.request.url).origin === self.location.origin;
+  if (!sameOrigin) return;   // пусть идёт обычным сетевым запросом, без вмешательства SW
   e.respondWith(
     fetch(e.request)
       .then((resp) => {
