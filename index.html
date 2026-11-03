@@ -988,7 +988,7 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='1.0.0';  // РЕЛИЗ 1.0. Патч — мелкая правка, минор — крупное изменение.
+const APP_VERSION='1.0.1';  // РЕЛИЗ 1.0. Патч — мелкая правка, минор — крупное изменение.
 const BUILD='2026-11-03';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
   let raw=null;
@@ -3063,7 +3063,10 @@ function saveDebtPay(id){ const d=state.debts.find(x=>x.id===id); if(!d)return; 
   if(!amt||amt<=0){ toast('Введи сумму'); return; }
   const paSel=document.getElementById('pay-acc'); const pa=(paSel&&paSel.value&&acc(paSel.value))?paSel.value:null;
   (d.payments ||= []).push({date:todayISO(),amount:round2(amt),accountId:pa}); save(); closeSheet(); toast('Готово ✓'); render(); }
-async function deleteDebt(id){ if(!await confirmSheet('Удалить долг?',{okText:'Удалить',danger:true}))return; state.debts=state.debts.filter(d=>d.id!==id); tomb(id); save(); toast('Удалено'); render(); }
+async function deleteDebt(id){ const d=state.debts.find(x=>x.id===id);
+  const moved = d && d.accountId && acc(d.accountId);   // H6: долг двигал баланс счёта (тело + возвраты)
+  const msg = moved ? 'Этот долг влиял на баланс счёта (тело и возвраты). Если удалить — баланс счёта изменится на эту сумму. Удалить?' : 'Удалить долг?';
+  if(!await confirmSheet(msg,{okText:'Удалить',danger:true}))return; state.debts=state.debts.filter(x=>x.id!==id); tomb(id); save(); toast('Удалено'); render(); }
 
 /* ---------- Счета (формы) ---------- */
 const PALETTE=['#5b8def','#3bb8ab','#7b5cff','#29b083','#ef5f68','#f0b429','#06b6d4','#ec4899','#84cc16','#f97316','#8b5cf6','#64748b','#e0a80b'];
@@ -3115,9 +3118,10 @@ function saveAccount(id) {
   save(); closeSheet(); toast('Сохранено'); renderMore();
 }
 async function deleteAccount(id) {
-  const used=state.transactions.some(t=>t.accountId===id||t.fromAccountId===id||t.toAccountId===id||(t.accountCredits&&t.accountCredits[id]));
+  const used=state.transactions.some(t=>t.accountId===id||t.fromAccountId===id||t.toAccountId===id||(t.accountCredits&&t.accountCredits[id]))
+    || state.debts.some(d=>d.accountId===id||(d.payments||[]).some(p=>p.accountId===id));   // H6: счёт занят долгом/возвратом — он двигает баланс
   if(used){
-    // H2: не удаляем счёт с операциями — иначе деньги «висят» на orphan-id и итоги разъезжаются. Только архив.
+    // H2: не удаляем счёт с операциями/долгами — иначе деньги «висят» на orphan-id и итоги разъезжаются. Только архив.
     if(await confirmSheet('По этому счёту есть операции — удалить нельзя (итоги разъедутся). Отправить в архив? Он скроется из списков, но останется в истории и балансе.',{okText:'В архив'})){ const a=acc(id); if(a){ a.archived=true; save(); toast('Счёт в архиве'); } renderMore(); }
     return;
   }
@@ -3158,7 +3162,7 @@ function saveEnvelope(id) {
   save(); closeSheet(); toast('Сохранено'); renderMore();
 }
 async function deleteEnvelope(id) {
-  const used=state.transactions.some(t=>t.envelopeId===id||t.fromEnvelopeId===id||t.toEnvelopeId===id||(t.distribution&&t.distribution[id])||(t.plan&&t.plan[id]));
+  const used=state.transactions.some(t=>t.envelopeId===id||t.fromEnvelopeId===id||t.toEnvelopeId===id||(t.distribution&&t.distribution[id])||(t.plan&&t.plan[id])||(Array.isArray(t.splits)&&t.splits.some(s=>s.envelopeId===id)));   // H6: учитываем split-части
   if(used){
     // H2: конверт с операциями не удаляем (иначе бюджет «зависнет» и «Свободно» завысится). Только архив.
     if(await confirmSheet('По этому конверту есть операции — удалить нельзя (итоги разъедутся). Отправить в архив? Он скроется из списков, но останется в истории и балансе.',{okText:'В архив'})){ const e=env(id); if(e){ e.archived=true; save(); toast('Конверт в архиве'); } renderMore(); }
@@ -3191,8 +3195,9 @@ function saveCategory(id) {
   save(); closeSheet(); toast('Сохранено'); renderMore();
 }
 async function deleteCategory(id) {
-  const used=state.transactions.some(t=>t.categoryId===id);
+  const used=state.transactions.some(t=>t.categoryId===id||(Array.isArray(t.splits)&&t.splits.some(s=>s.categoryId===id)));   // H6: учитываем split-части
   if(!await confirmSheet(used?'По категории есть операции. Они останутся без категории. Удалить?':'Удалить категорию?',{okText:'Удалить',danger:true}))return;
+  if(used) state.transactions.forEach(t=>{ if(t.categoryId===id) t.categoryId=null; if(Array.isArray(t.splits)) t.splits.forEach(s=>{ if(s.categoryId===id) s.categoryId=null; }); });   // чистим ссылки → в отчётах «Без категории»
   state.categories=state.categories.filter(c=>c.id!==id); tomb(id); save(); toast('Удалено'); renderMore();
 }
 
@@ -3214,12 +3219,15 @@ function saveCurrency(code) {
   save(); closeSheet(); toast('Сохранено'); renderMore();
 }
 function makeBase(code){ const nb=cur(code); if(!nb||nb.rate<=0){toast('Сначала задай курс');return;}
+  // H6: смена базы НЕ мигрирует суммы, заданные в старой базе (цели/лимиты конвертов, бюджет долгов, снимки курсов) — после появления истории это исказило бы данные. Блокируем.
+  if((state.transactions&&state.transactions.length)||(state.debts&&state.debts.length)){ toast('Сменить базовую валюту можно только пока нет операций и долгов (иначе цели, лимиты и история исказятся).'); return; }
   const factor=nb.rate; state.currencies.forEach(c=>{ c.rate=c.code===code?1:c.rate/factor; }); state.baseCurrency=code; save(); closeSheet(); toast('Базовая: '+code); renderMore(); }
 async function deleteCurrency(code){ if(code===state.baseCurrency){toast('Нельзя удалить базовую');return;}
   if(state.accounts.some(a=>a.currency===code)){ toast('Валюта используется счётом'); return; }
   if(state.goals.some(g=>g.currency===code)){ toast('Валюта используется целью'); return; }   // M17
   const used=state.transactions.some(t=>t.currency===code||t.fromCurrency===code||t.toCurrency===code)||state.debts.some(d=>d.currency===code);
-  if(used&&!await confirmSheet('В этой валюте есть операции. Всё равно удалить?',{okText:'Удалить',danger:true}))return;
+  if(used){ toast('Валюта есть в операциях/долгах — удалить нельзя (иначе история пересчитается по курсу 1).'); return; }   // H6: не оставляем историю без курса
+  if(!await confirmSheet('Удалить валюту?',{okText:'Удалить',danger:true}))return;
   state.currencies=state.currencies.filter(c=>c.code!==code); save(); toast('Удалено'); renderMore(); }
 
 /* ---------- Автообновление курсов ---------- */
@@ -3480,9 +3488,9 @@ async function runCsvImport(){
   const d=csvData; if(!d) return; const a=acc(d.accountId); if(!a){ toast('Выбери счёт'); return; }
   const code=a.currency||state.baseCurrency, inv=a.investment;
   // H5: дедуп по КОЛИЧЕСТВУ вхождений — одинаковые строки внутри файла импортируются; повторный импорт того же файла — нет.
-  const keyOf=(date,amt,note,isInc)=>`${date}|${amt}|${note.trim().toLowerCase()}|${isInc?'i':'e'}`;
+  const acctCurOf=t=>{ if(t.type==='expense') return [t.accountId||'', t.currency||'']; if(t.type==='income'){ const ks=t.accountCredits?Object.keys(t.accountCredits):[]; if(ks.length===1){ const cr=t.accountCredits[ks[0]]; return [ks[0], (typeof cr==='number'?t.currency:(cr&&cr.cur))||'']; } } return ['','']; };
   const existing={};
-  state.transactions.forEach(t=>{ if(t.type!=='income'&&t.type!=='expense') return; const k=keyOf(t.date,round2(t.amount),(t.note||''),t.type==='income'); existing[k]=(existing[k]||0)+1; });
+  state.transactions.forEach(t=>{ if(t.type!=='income'&&t.type!=='expense') return; const [ai,ci]=acctCurOf(t); const k=csvDedupKey(t.date,t.amount,t.note||'',t.type==='income',ai,ci); existing[k]=(existing[k]||0)+1; });
   const batch={};
   // Этап 3: авто-категоризация по истории (payee memory) — описание из прошлых операций → категория.
   const noteCat={}; state.transactions.forEach(t=>{ if((t.type==='expense'||t.type==='income')&&t.note&&t.categoryId){ const k=t.note.trim().toLowerCase(); if(k) noteCat[k]={cat:t.categoryId,inc:t.type==='income'}; } });
@@ -3491,7 +3499,7 @@ async function runCsvImport(){
   for(const r of d.body){ const dt=parseCsvDate(r[d.map.date],d.dateOrder), am=parseCsvAmount(r[d.map.amount]); if(!dt||am==null||Math.abs(am)<0.0001) continue;
     const note=d.map.note>=0?String(r[d.map.note]||'').trim():''; const amt=round2(Math.abs(am));
     const isInc=d.sign==='income'||(d.sign==='auto'&&am>0);
-    const key=keyOf(dt,amt,note,isInc); const done=batch[key]||0;
+    const key=csvDedupKey(dt,amt,note,isInc,d.accountId,code); const done=batch[key]||0;
     if(done < (existing[key]||0)){ batch[key]=done+1; dup++; continue; }   // такое количество уже есть в истории
     batch[key]=done+1;
     const hit=note?noteCat[note.toLowerCase()]:null; const catId=(hit&&hit.inc===isInc)?hit.cat:null; if(catId) catn++;
@@ -3505,14 +3513,8 @@ async function runCsvImport(){
 /* ---------- Добавление операции из текста SMS/уведомления банка (пункт 4) ---------- */
 function parseSmsAmount(text){
   text=String(text).replace(/ /g,' ');
-  // 1) число рядом с валютой — самый надёжный признак суммы
-  const re=/(\d[\d\s]{0,12}(?:[.,]\d{1,2})?)\s*(₸|тг|тнг|тенге|руб|₽|грн|₴|\$|usd|eur|€|kzt|rub|uah)/gi;
-  let m, best=null; while((m=re.exec(text))){ const n=parseFloat(m[1].replace(/\s/g,'').replace(',','.')); if(!isNaN(n)) best=n; }
-  if(best!=null) return round2(best);
-  // 2) запасной вариант — самое большое число, не являющееся маской карты (*1234)
-  const nums=[]; let mm; const re2=/(^|[^\d*])(\d[\d\s]{0,12}(?:[.,]\d{1,2})?)/g;
-  while((mm=re2.exec(text))){ const n=parseFloat(mm[2].replace(/\s/g,'').replace(',','.')); if(!isNaN(n)) nums.push(n); }
-  return nums.length? round2(Math.max(...nums)) : null;
+  // Логика определения суммы вынесена в core.js (smsAmount) — чистая, тестируется в Deno. Берёт сумму покупки, не остаток.
+  return smsAmount(text);
 }
 function smsMerchant(text){
   let s=String(text).replace(/ /g,' ').replace(/https?:\/\/\S+/g,' ');

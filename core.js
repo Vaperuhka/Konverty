@@ -28,6 +28,8 @@ const toBaseAt = (amount, code, date) => amount * rateAt(code, date);
 const fmtBase = amount => fmt(amount, state.baseCurrency);
 // Перевод суммы из одной валюты в другую по заданным курсам
 const convert = (amount, from, to) => from===to ? round2(amount) : round2(amount * cur(from).rate / cur(to).rate);
+// Как convert, но по ИСТОРИЧЕСКОМУ курсу на дату (через базу): движение по счёту от долга/возврата не должно «плавать» с текущим курсом.
+const convertAt = (amount, from, to, date) => from===to ? round2(amount) : round2(amount * rateAt(from,date) / rateAt(to,date));
 const accCur = id => acc(id)?.currency || state.baseCurrency;
 
 const acc = id => state.accounts.find(a=>a.id===id);
@@ -87,10 +89,10 @@ function _computeBalances() {
   for (const d of state.debts) {
     if (!d.accountId || !acc(d.accountId)) continue;
     const sign = d.direction==='iowe' ? 1 : -1;   // мне дали в долг → +на счёт; я дал в долг → −со счёта
-    addAcc(d.accountId, accCur(d.accountId), sign * convert(d.amount, d.currency, accCur(d.accountId)));
+    addAcc(d.accountId, accCur(d.accountId), sign * convertAt(d.amount, d.currency, accCur(d.accountId), d.date));
     for (const p of (d.payments||[])) {
       const pa = (p.accountId && acc(p.accountId)) ? p.accountId : d.accountId;
-      addAcc(pa, accCur(pa), -sign * convert(p.amount, d.currency, accCur(pa)));   // возврат — в обратную сторону
+      addAcc(pa, accCur(pa), -sign * convertAt(p.amount, d.currency, accCur(pa), p.date||d.date));   // возврат — по курсу на дату платежа
     }
   }
   return { envBal, accBal, owedBal };
@@ -248,12 +250,34 @@ function periodReport(fromYm, toYm){
   return { income:round2(income), expense:round2(expense), net:round2(income-expense), expByCat, incByCat };
 }
 
+/* ---------- Импорт CSV: ключ дедупликации (пункт 3.13) ---------- */
+// Учитывает счёт и валюту: один и тот же чек, импортированный на РАЗНЫЕ счета/в разных валютах, больше не считается дублем.
+function csvDedupKey(date, amt, note, isInc, acctId, curc){
+  return `${date}|${round2(amt)}|${String(note||'').trim().toLowerCase()}|${isInc?'i':'e'}|${acctId||''}|${curc||''}`;
+}
+
+/* ---------- SMS-парсер суммы (пункт 3.4) ---------- */
+// Берём сумму ОПЕРАЦИИ (покупки/списания), а не остаток/доступно: число рядом со словом-остатком не выбираем.
+function smsAmount(text){
+  text=String(text).replace(/ /g,' ');
+  const BAL=/(доступн|остаток|бала?нс|dostupno|available|balance|ostatok)/i;
+  const re=/(\d[\d\s]{0,12}(?:[.,]\d{1,2})?)\s*(₸|тг|тнг|тенге|руб|₽|грн|₴|\$|usd|eur|€|kzt|rub|uah)/gi;
+  let m; const hits=[];
+  while((m=re.exec(text))){ const n=parseFloat(m[1].replace(/\s/g,'').replace(',','.')); if(isNaN(n)) continue;
+    const before=text.slice(Math.max(0,m.index-24), m.index); hits.push({n, bal:BAL.test(before)}); }
+  if(hits.length){ const op=hits.filter(h=>!h.bal); return round2((op.length?op[0]:hits[0]).n); }
+  // запасной вариант — самое большое число, не являющееся маской карты (*1234)
+  const nums=[]; let mm; const re2=/(^|[^\d*])(\d[\d\s]{0,12}(?:[.,]\d{1,2})?)/g;
+  while((mm=re2.exec(text))){ const n=parseFloat(mm[2].replace(/\s/g,'').replace(',','.')); if(!isNaN(n)) nums.push(n); }
+  return nums.length? round2(Math.max(...nums)) : null;
+}
+
 // Экспорт для не-браузерных сред (Deno/Node) — чтобы тесты могли дотянуться до функций.
 // В браузере есть globalThis.document → блок пропускается, на приложение не влияет.
 if (typeof globalThis.document === 'undefined') {
-  globalThis.KonvertyCore = { cur, round2, fmt, toBase, rateAt, toBaseAt, fmtBase, convert, accCur, acc, env, catById,
+  globalThis.KonvertyCore = { cur, round2, fmt, toBase, rateAt, toBaseAt, fmtBase, convert, convertAt, accCur, acc, env, catById,
     txParts, activeAccounts, spendableAccounts, investmentAccounts, activeEnvelopes,
     _computeBalances, computeBalances, sumBase, accountBase, envelopeBase, owedBase, totalNet, spendableTotal,
     envelopesTotal, totalOwed, goalsReservedBase, committedEnvelopes, freeMoney, unallocated,
-    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome, mergeStates, periodReport, sanitizeIds };
+    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome, mergeStates, periodReport, sanitizeIds, csvDedupKey, smsAmount };
 }
