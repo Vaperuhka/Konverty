@@ -164,9 +164,9 @@ function computeIncome(amount, mainAccountId) {
     offSumMain += amtMain;
   }});
   // Защита: суммарный off-top не может превышать доход (несколько инвест-счетов >100%) — масштабируем вниз.
-  if (offSumMain>amount && offSumMain>0){ const k=amount/offSumMain;
-    for (const o of Object.values(offTop)){ o.amtMain=round2(o.amtMain*k); o.amt=convert(o.amtMain, mainCur, o.cur); }
-    offSumMain=amount;
+  if (offSumMain>amount && offSumMain>0){ const k=amount/offSumMain; let s=0;
+    for (const o of Object.values(offTop)){ o.amtMain=round2(o.amtMain*k); o.amt=convert(o.amtMain, mainCur, o.cur); s+=o.amtMain; }
+    offSumMain=round2(s);   // фактическая сумма после округления; копеечный хвост уйдёт в remainder (на основной счёт), не потеряется
   }
   const remainder = round2(Math.max(0, amount - offSumMain));    // в валюте дохода
   const accountCredits = {};
@@ -199,8 +199,53 @@ function mergeStates(local, remote){
     for(const it of (newer[coll]||[])) if(it && it.id!=null) map.set(String(it.id), it);
     out[coll] = [...map.values()].filter(it => !(String(it.id) in tomb));
   }
+  // Валюты — объединяем по коду (newer выигрывает конфликт); rateHistory — объединяем снимки по дате (newer выигрывает ту же дату).
+  { const cm=new Map();
+    for(const c of (older.currencies||[])) if(c&&c.code) cm.set(c.code,c);
+    for(const c of (newer.currencies||[])) if(c&&c.code) cm.set(c.code,c);
+    if(cm.size) out.currencies=[...cm.values()]; }
+  out.rateHistory = Object.assign({}, older.rateHistory||{}, newer.rateHistory||{});
   out.rev = Math.max(lRev, rRev);
   return out;
+}
+
+// Санитайз id всех сущностей (импорт/синк могут принести id со спецсимволами → инъекция в onclick/атрибуты).
+// Приводим к безопасному набору [A-Za-z0-9_-], согласованно обновляя ВСЕ ссылки. Для чистых данных (uid=base36) — no-op.
+function sanitizeIds(state, uidFn){
+  const safe = s => String(s==null?'':s).replace(/[^A-Za-z0-9_-]/g,'');
+  const remap={}, used=new Set();
+  const colls=['accounts','envelopes','categories','transactions','debts','recurring','goals','events','watchlists','templates'];
+  for(const coll of colls){ for(const it of (state[coll]||[])){ if(!it || it.id==null) continue; const id=String(it.id);
+    let ns=safe(id) || (uidFn?uidFn():'id'+Math.random().toString(36).slice(2,8));
+    if(ns!==id || used.has(ns)){ while(used.has(ns)) ns=ns+'x'+Math.floor(Math.random()*1679616).toString(36); if(ns!==id) remap[id]=ns; it.id=ns; }
+    used.add(it.id); } }
+  if(!Object.keys(remap).length) return state;   // чистые данные — ничего не меняли
+  const rm=v=>(v!=null && remap[String(v)]!=null)?remap[String(v)]:v;
+  const rk=o=>{ if(!o||typeof o!=='object') return o; const n={}; for(const k in o) n[rm(k)]=o[k]; return n; };
+  for(const t of (state.transactions||[])){ t.accountId=rm(t.accountId); t.fromAccountId=rm(t.fromAccountId); t.toAccountId=rm(t.toAccountId);
+    t.envelopeId=rm(t.envelopeId); t.fromEnvelopeId=rm(t.fromEnvelopeId); t.toEnvelopeId=rm(t.toEnvelopeId); t.categoryId=rm(t.categoryId);
+    if(Array.isArray(t.splits)) t.splits.forEach(s=>{ s.envelopeId=rm(s.envelopeId); s.categoryId=rm(s.categoryId); });
+    t.distribution=rk(t.distribution); t.plan=rk(t.plan); t.accountCredits=rk(t.accountCredits); }
+  for(const d of (state.debts||[])){ d.accountId=rm(d.accountId); (d.payments||[]).forEach(p=>{ p.accountId=rm(p.accountId); }); }
+  for(const r of (state.recurring||[])){ r.accountId=rm(r.accountId); r.categoryId=rm(r.categoryId); }
+  for(const g of (state.goals||[])){ g.envelopeId=rm(g.envelopeId); }
+  for(const ev of (state.events||[])){ ev.envelopeId=rm(ev.envelopeId); }
+  for(const w of (state.watchlists||[])){ if(w && w.type==='category') w.value=rm(w.value); }
+  return state;
+}
+
+/* ---------- Отчёты за период ---------- */
+// Сводка за период [fromYm..toYm] включительно (строки 'YYYY-MM'): доходы/расходы/нетто
+// и разбивка по категориям, в базовой валюте по ИСТОРИЧЕСКОМУ курсу (как «Анализ»). split учитывается по частям.
+function periodReport(fromYm, toYm){
+  let income=0, expense=0; const expByCat={}, incByCat={};
+  for(const t of state.transactions){
+    if(t.hidden) continue;
+    const ym=(t.date||'').slice(0,7); if(ym<fromYm || ym>toYm) continue;
+    if(t.type==='income'){ const v=toBaseAt(t.amount, t.currency, t.date); income+=v; const k=t.categoryId||'__none__'; incByCat[k]=round2((incByCat[k]||0)+v); }
+    else if(t.type==='expense'){ for(const p of txParts(t)){ const v=toBaseAt(p.amount, t.currency, t.date); expense+=v; const k=p.categoryId||'__none__'; expByCat[k]=round2((expByCat[k]||0)+v); } }
+  }
+  return { income:round2(income), expense:round2(expense), net:round2(income-expense), expByCat, incByCat };
 }
 
 // Экспорт для не-браузерных сред (Deno/Node) — чтобы тесты могли дотянуться до функций.
@@ -210,5 +255,5 @@ if (typeof globalThis.document === 'undefined') {
     txParts, activeAccounts, spendableAccounts, investmentAccounts, activeEnvelopes,
     _computeBalances, computeBalances, sumBase, accountBase, envelopeBase, owedBase, totalNet, spendableTotal,
     envelopesTotal, totalOwed, goalsReservedBase, committedEnvelopes, freeMoney, unallocated,
-    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome, mergeStates };
+    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome, mergeStates, periodReport, sanitizeIds };
 }

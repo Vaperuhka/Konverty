@@ -455,7 +455,7 @@
   .legend .lg { display:flex; align-items:center; gap:5px; }
   .legend .lg i { width:10px; height:10px; border-radius:3px; display:inline-block; }
   .mini-seg { display:flex; gap:4px; margin-bottom:8px; background:var(--card2); border-radius:var(--r-md); padding:4px; }
-  .mini-seg button { flex:1; padding:8px; border-radius:var(--r-sm); font-size:12.5px; font-weight:700; color:var(--muted); background:transparent; }
+  .mini-seg button { flex:1; padding:8px; min-height:var(--tap); border-radius:var(--r-sm); font-size:12.5px; font-weight:700; color:var(--muted); background:transparent; }
   .mini-seg button.active { background:var(--card); color:var(--txt); box-shadow:var(--shadow); }
 
   .seg { display:flex; background:var(--card2); border-radius:var(--r-md); padding:4px; gap:4px; }
@@ -678,7 +678,7 @@
   .grow { flex:1; min-width:0; }
   .small-note { font-size:12.5px; color:var(--muted); line-height:1.5; }
   .chips { display:flex; gap:8px; flex-wrap:wrap; }
-  .chip { padding:9px 15px; border-radius:999px; background:var(--card); border:1.5px solid var(--line); color:var(--muted); font-size:14px; font-weight:600; }
+  .chip { padding:9px 15px; min-height:var(--tap); border-radius:999px; background:var(--card); border:1.5px solid var(--line); color:var(--muted); font-size:14px; font-weight:600; display:inline-flex; align-items:center; }
   .chip.active { background:var(--accent); color:var(--on-accent); border-color:transparent; }
   .warn-box { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-txt); border-radius:var(--r-md); padding:10px 13px; font-size:13px; margin-bottom:12px; }
   .info-line { background:var(--accent-soft); color:var(--accent-d); border-radius:var(--r-md); padding:10px 13px; font-size:13px; margin:8px 0; font-weight:600; }
@@ -746,124 +746,124 @@
   #splash .sp-name { font-size:25px; font-weight:800; color:var(--txt); letter-spacing:.3px; }
   #splash .sp-sub { font-size:12px; color:var(--muted); margin-top:-10px; letter-spacing:3px; text-transform:uppercase; }
   /* === Utility classes (0.21.0): extracted from repeated inline style=; class name encodes the rules === */
-  .u-bg-accent{background:var(--accent)}
-  .u-bg-card2{background:var(--card2)}
-  .u-bg-green{background:var(--green)}
-  .u-bg-red{background:var(--red)}
-  .u-bg-red-soft_c-red{background:var(--red-soft);color:var(--red)}
-  .u-bg-red-soft_c-red_d-flex_ai-center_g-8_fwrap-wrap{background:var(--red-soft);color:var(--red);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .u-bg-red-soft_c-red_mt-8{background:var(--red-soft);color:var(--red);margin-top:8px}
-  .u-c-accent{color:var(--accent)}
-  .u-c-green{color:var(--green)}
-  .u-c-red{color:var(--red)}
-  .u-cur-default{cursor:default}
-  .u-cur-pointer{cursor:pointer}
-  .u-d-block_ov-visible{display:block;overflow:visible}
-  .u-d-flex_ai-center_g-10_fd-row{display:flex;align-items:center;gap:10px;flex-direction:row}
-  .u-d-flex_ai-center_jc-space-between_cur-pointer{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
-  .u-d-flex_ai-center_jc-space-between_g-10{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .u-d-flex_fwrap-wrap_g-8_jc-center_mt-14{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
-  .u-d-flex_g-6_mt-6_jc-flex-end{display:flex;gap:6px;margin-top:6px;justify-content:flex-end}
-  .u-d-flex_g-7_jc-center_m-16-0-4{display:flex;gap:7px;justify-content:center;margin:16px 0 4px}
-  .u-d-flex_g-7_jc-center_m-18-0-4{display:flex;gap:7px;justify-content:center;margin:18px 0 4px}
-  .u-d-flex_g-8_mt-10_ai-center{display:flex;gap:8px;margin-top:10px;align-items:center}
-  .u-fl-0-0-118_ta-right{flex:0 0 118px;text-align:right}
-  .u-fl-0-0-78_ta-right{flex:0 0 78px;text-align:right}
-  .u-fl-1{flex:1}
-  .u-fs-11{font-size:11px}
-  .u-fs-12_5{font-size:12.5px}
-  .u-fs-12{font-size:12px}
-  .u-fs-13_5_lh-1_5_mb-10{font-size:13.5px;line-height:1.5;margin-bottom:10px}
-  .u-fs-14_lh-1_55_ta-left{font-size:14px;line-height:1.55;text-align:left}
-  .u-fs-18{font-size:18px}
-  .u-fs-23_fw-800{font-size:23px;font-weight:800}
-  .u-fs-46{font-size:46px}
-  .u-fw-400{font-weight:400}
-  .u-fw-600{font-weight:600}
-  .u-fw-700{font-weight:700}
-  .u-fw-700_fs-13{font-weight:700;font-size:13px}
-  .u-fw-700_mb-6{font-weight:700;margin-bottom:6px}
-  .u-fw-800{font-weight:800}
-  .u-fw-800_fs-12{font-weight:800;font-size:12px}
-  .u-g-10{gap:10px}
-  .u-g-10_p-5-2{gap:10px;padding:5px 2px}
-  .u-h-8_br-999_bg-card2_ov-hidden_mt-3{height:8px;border-radius:999px;background:var(--card2);overflow:hidden;margin-top:3px}
-  .u-h-96{height:96px}
-  .u-h-9{height:9px}
-  .u-lh-1_6{line-height:1.6}
-  .u-m-0{margin:0}
-  .u-m-0-0-12{margin:0 0 12px}
-  .u-m-0-0-2{margin:0 0 2px}
-  .u-m-0-0-4{margin:0 0 4px}
-  .u-m-0-0-6{margin:0 0 6px}
-  .u-m-0-0-8{margin:0 0 8px}
-  .u-m-0-2-10{margin:0 2px 10px}
-  .u-m-0-2-4{margin:0 2px 4px}
-  .u-m-0-2-8{margin:0 2px 8px}
-  .u-m-0-2-8_c-warn-txt{margin:0 2px 8px;color:var(--warn-txt)}
-  .u-m-0-4-10{margin:0 4px 10px}
-  .u-m-0-4-12{margin:0 4px 12px}
-  .u-m-10-0-10{margin:10px 0 10px}
-  .u-m-10-0-4{margin:10px 0 4px}
-  .u-m-10-0-6{margin:10px 0 6px}
-  .u-m-10-4{margin:10px 4px}
-  .u-m-10-6-30{margin:10px 6px 30px}
-  .u-m-12-2-4{margin:12px 2px 4px}
-  .u-m-12-2_g-10_cur-pointer{margin:12px 2px;gap:10px;cursor:pointer}
-  .u-m-12-6-30{margin:12px 6px 30px}
-  .u-m-2-0-8{margin:2px 0 8px}
-  .u-m-2-2-0{margin:2px 2px 0}
-  .u-m-2-2-2{margin:2px 2px 2px}
-  .u-m-2-2-4{margin:2px 2px 4px}
-  .u-m-2-2-8{margin:2px 2px 8px}
-  .u-m-n4-0-10{margin:-4px 0 10px}
-  .u-m-n4-2-12{margin:-4px 2px 12px}
-  .u-m-6-0-12{margin:6px 0 12px}
-  .u-m-6-2-0{margin:6px 2px 0}
-  .u-m-n6-2-10{margin:-6px 2px 10px}
-  .u-m-n6-2-12{margin:-6px 2px 12px}
-  .u-m-8-0{margin:8px 0}
-  .u-m-8-0-4{margin:8px 0 4px}
-  .u-m-8-2-0{margin:8px 2px 0}
-  .u-m-8-2-2{margin:8px 2px 2px}
-  .u-m-8-2-4{margin:8px 2px 4px}
-  .u-mb-10{margin-bottom:10px}
-  .u-mb-12{margin-bottom:12px}
-  .u-mb-14{margin-bottom:14px}
-  .u-mb-6{margin-bottom:6px}
-  .u-mb-7{margin-bottom:7px}
-  .u-mb-8{margin-bottom:8px}
-  .u-ml-6{margin-left:6px}
-  .u-ml-auto{margin-left:auto}
-  .u-mt-0{margin-top:0}
-  .u-mt-10{margin-top:10px}
-  .u-mt-12{margin-top:12px}
-  .u-mt-14{margin-top:14px}
-  .u-mt-16{margin-top:16px}
-  .u-mt-2{margin-top:2px}
-  .u-mt-3{margin-top:3px}
-  .u-mt-4{margin-top:4px}
-  .u-mt-4_h-4_maxw-170{margin-top:4px;height:4px;max-width:170px}
-  .u-mt-6{margin-top:6px}
-  .u-mt-7{margin-top:7px}
-  .u-mt-8{margin-top:8px}
-  .u-mt-8_w-100pc{margin-top:8px;width:100%}
-  .u-mt-9_ai-flex-start{margin-top:9px;align-items:flex-start}
-  .u-maxh-150_ovy-auto{max-height:150px;overflow-y:auto}
-  .u-minw-0{min-width:0}
-  .u-p-10-2_bb-1-solid-line_g-6{padding:10px 2px;border-bottom:1px solid var(--line);gap:6px}
-  .u-p-6-2-2{padding:6px 2px 2px}
-  .u-p-8-0{padding:8px 0}
-  .u-rz-vertical_minh-96{resize:vertical;min-height:96px}
-  .u-ta-center{text-align:center}
-  .u-ta-center_mt-6{text-align:center;margin-top:6px}
-  .u-ta-center_p-6-4-2{text-align:center;padding:6px 4px 2px}
-  .u-ta-right{text-align:right}
-  .u-ta-right_fl-0-0-auto{text-align:right;flex:0 0 auto}
-  .u-tt-none_ls-0_fw-600{text-transform:none;letter-spacing:0;font-weight:600}
-  .u-tt-none_ls-0_fw-700{text-transform:none;letter-spacing:0;font-weight:700}
-  .u-tt-uppercase{text-transform:uppercase}
-  .u-w-20_h-20{width:20px;height:20px}
+  .u-bg-accent{background:var(--accent) !important}
+  .u-bg-card2{background:var(--card2) !important}
+  .u-bg-green{background:var(--green) !important}
+  .u-bg-red{background:var(--red) !important}
+  .u-bg-red-soft_c-red{background:var(--red-soft) !important;color:var(--red) !important}
+  .u-bg-red-soft_c-red_d-flex_ai-center_g-8_fwrap-wrap{background:var(--red-soft) !important;color:var(--red) !important;display:flex !important;align-items:center !important;gap:8px !important;flex-wrap:wrap !important}
+  .u-bg-red-soft_c-red_mt-8{background:var(--red-soft) !important;color:var(--red) !important;margin-top:8px !important}
+  .u-c-accent{color:var(--accent) !important}
+  .u-c-green{color:var(--green) !important}
+  .u-c-red{color:var(--red) !important}
+  .u-cur-default{cursor:default !important}
+  .u-cur-pointer{cursor:pointer !important}
+  .u-d-block_ov-visible{display:block !important;overflow:visible !important}
+  .u-d-flex_ai-center_g-10_fd-row{display:flex !important;align-items:center !important;gap:10px !important;flex-direction:row !important}
+  .u-d-flex_ai-center_jc-space-between_cur-pointer{display:flex !important;align-items:center !important;justify-content:space-between !important;cursor:pointer !important}
+  .u-d-flex_ai-center_jc-space-between_g-10{display:flex !important;align-items:center !important;justify-content:space-between !important;gap:10px !important}
+  .u-d-flex_fwrap-wrap_g-8_jc-center_mt-14{display:flex !important;flex-wrap:wrap !important;gap:8px !important;justify-content:center !important;margin-top:14px !important}
+  .u-d-flex_g-6_mt-6_jc-flex-end{display:flex !important;gap:6px !important;margin-top:6px !important;justify-content:flex-end !important}
+  .u-d-flex_g-7_jc-center_m-16-0-4{display:flex !important;gap:7px !important;justify-content:center !important;margin:16px 0 4px !important}
+  .u-d-flex_g-7_jc-center_m-18-0-4{display:flex !important;gap:7px !important;justify-content:center !important;margin:18px 0 4px !important}
+  .u-d-flex_g-8_mt-10_ai-center{display:flex !important;gap:8px !important;margin-top:10px !important;align-items:center !important}
+  .u-fl-0-0-118_ta-right{flex:0 0 118px !important;text-align:right !important}
+  .u-fl-0-0-78_ta-right{flex:0 0 78px !important;text-align:right !important}
+  .u-fl-1{flex:1 !important}
+  .u-fs-11{font-size:11px !important}
+  .u-fs-12_5{font-size:12.5px !important}
+  .u-fs-12{font-size:12px !important}
+  .u-fs-13_5_lh-1_5_mb-10{font-size:13.5px !important;line-height:1.5 !important;margin-bottom:10px !important}
+  .u-fs-14_lh-1_55_ta-left{font-size:14px !important;line-height:1.55 !important;text-align:left !important}
+  .u-fs-18{font-size:18px !important}
+  .u-fs-23_fw-800{font-size:23px !important;font-weight:800 !important}
+  .u-fs-46{font-size:46px !important}
+  .u-fw-400{font-weight:400 !important}
+  .u-fw-600{font-weight:600 !important}
+  .u-fw-700{font-weight:700 !important}
+  .u-fw-700_fs-13{font-weight:700 !important;font-size:13px !important}
+  .u-fw-700_mb-6{font-weight:700 !important;margin-bottom:6px !important}
+  .u-fw-800{font-weight:800 !important}
+  .u-fw-800_fs-12{font-weight:800 !important;font-size:12px !important}
+  .u-g-10{gap:10px !important}
+  .u-g-10_p-5-2{gap:10px !important;padding:5px 2px !important}
+  .u-h-8_br-999_bg-card2_ov-hidden_mt-3{height:8px !important;border-radius:999px !important;background:var(--card2) !important;overflow:hidden !important;margin-top:3px !important}
+  .u-h-96{height:96px !important}
+  .u-h-9{height:9px !important}
+  .u-lh-1_6{line-height:1.6 !important}
+  .u-m-0{margin:0 !important}
+  .u-m-0-0-12{margin:0 0 12px !important}
+  .u-m-0-0-2{margin:0 0 2px !important}
+  .u-m-0-0-4{margin:0 0 4px !important}
+  .u-m-0-0-6{margin:0 0 6px !important}
+  .u-m-0-0-8{margin:0 0 8px !important}
+  .u-m-0-2-10{margin:0 2px 10px !important}
+  .u-m-0-2-4{margin:0 2px 4px !important}
+  .u-m-0-2-8{margin:0 2px 8px !important}
+  .u-m-0-2-8_c-warn-txt{margin:0 2px 8px !important;color:var(--warn-txt) !important}
+  .u-m-0-4-10{margin:0 4px 10px !important}
+  .u-m-0-4-12{margin:0 4px 12px !important}
+  .u-m-10-0-10{margin:10px 0 10px !important}
+  .u-m-10-0-4{margin:10px 0 4px !important}
+  .u-m-10-0-6{margin:10px 0 6px !important}
+  .u-m-10-4{margin:10px 4px !important}
+  .u-m-10-6-30{margin:10px 6px 30px !important}
+  .u-m-12-2-4{margin:12px 2px 4px !important}
+  .u-m-12-2_g-10_cur-pointer{margin:12px 2px !important;gap:10px !important;cursor:pointer !important}
+  .u-m-12-6-30{margin:12px 6px 30px !important}
+  .u-m-2-0-8{margin:2px 0 8px !important}
+  .u-m-2-2-0{margin:2px 2px 0 !important}
+  .u-m-2-2-2{margin:2px 2px 2px !important}
+  .u-m-2-2-4{margin:2px 2px 4px !important}
+  .u-m-2-2-8{margin:2px 2px 8px !important}
+  .u-m-n4-0-10{margin:-4px 0 10px !important}
+  .u-m-n4-2-12{margin:-4px 2px 12px !important}
+  .u-m-6-0-12{margin:6px 0 12px !important}
+  .u-m-6-2-0{margin:6px 2px 0 !important}
+  .u-m-n6-2-10{margin:-6px 2px 10px !important}
+  .u-m-n6-2-12{margin:-6px 2px 12px !important}
+  .u-m-8-0{margin:8px 0 !important}
+  .u-m-8-0-4{margin:8px 0 4px !important}
+  .u-m-8-2-0{margin:8px 2px 0 !important}
+  .u-m-8-2-2{margin:8px 2px 2px !important}
+  .u-m-8-2-4{margin:8px 2px 4px !important}
+  .u-mb-10{margin-bottom:10px !important}
+  .u-mb-12{margin-bottom:12px !important}
+  .u-mb-14{margin-bottom:14px !important}
+  .u-mb-6{margin-bottom:6px !important}
+  .u-mb-7{margin-bottom:7px !important}
+  .u-mb-8{margin-bottom:8px !important}
+  .u-ml-6{margin-left:6px !important}
+  .u-ml-auto{margin-left:auto !important}
+  .u-mt-0{margin-top:0 !important}
+  .u-mt-10{margin-top:10px !important}
+  .u-mt-12{margin-top:12px !important}
+  .u-mt-14{margin-top:14px !important}
+  .u-mt-16{margin-top:16px !important}
+  .u-mt-2{margin-top:2px !important}
+  .u-mt-3{margin-top:3px !important}
+  .u-mt-4{margin-top:4px !important}
+  .u-mt-4_h-4_maxw-170{margin-top:4px !important;height:4px !important;max-width:170px !important}
+  .u-mt-6{margin-top:6px !important}
+  .u-mt-7{margin-top:7px !important}
+  .u-mt-8{margin-top:8px !important}
+  .u-mt-8_w-100pc{margin-top:8px !important;width:100% !important}
+  .u-mt-9_ai-flex-start{margin-top:9px !important;align-items:flex-start !important}
+  .u-maxh-150_ovy-auto{max-height:150px !important;overflow-y:auto !important}
+  .u-minw-0{min-width:0 !important}
+  .u-p-10-2_bb-1-solid-line_g-6{padding:10px 2px !important;border-bottom:1px solid var(--line) !important;gap:6px !important}
+  .u-p-6-2-2{padding:6px 2px 2px !important}
+  .u-p-8-0{padding:8px 0 !important}
+  .u-rz-vertical_minh-96{resize:vertical !important;min-height:96px !important}
+  .u-ta-center{text-align:center !important}
+  .u-ta-center_mt-6{text-align:center !important;margin-top:6px !important}
+  .u-ta-center_p-6-4-2{text-align:center !important;padding:6px 4px 2px !important}
+  .u-ta-right{text-align:right !important}
+  .u-ta-right_fl-0-0-auto{text-align:right !important;flex:0 0 auto !important}
+  .u-tt-none_ls-0_fw-600{text-transform:none !important;letter-spacing:0 !important;font-weight:600 !important}
+  .u-tt-none_ls-0_fw-700{text-transform:none !important;letter-spacing:0 !important;font-weight:700 !important}
+  .u-tt-uppercase{text-transform:uppercase !important}
+  .u-w-20_h-20{width:20px !important;height:20px !important}
 </style>
 </head>
 <body>
@@ -988,7 +988,7 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='0.21.0';  // пререлиз (major 0). Патч — мелкая правка, минор — крупное изменение.
+const APP_VERSION='1.0.0';  // РЕЛИЗ 1.0. Патч — мелкая правка, минор — крупное изменение.
 const BUILD='2026-11-03';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
   let raw=null;
@@ -1024,6 +1024,15 @@ function normalize() {
   // Надгробия удалений (для синхронизации): объект {id:ts}. Чистим старше 120 дней, чтобы не разрастались.
   state.tombstones = (state.tombstones && typeof state.tombstones==='object') ? state.tombstones : {};
   { const cutoff=Date.now()-120*864e5; for(const id in state.tombstones){ const ts=+state.tombstones[id]||0; if(ts && ts<cutoff) delete state.tombstones[id]; } }
+  // H6 (безопасность): id сущностей → безопасный набор (импорт/синк могут принести опасные id → инъекция в onclick/атрибуты). Чистые данные (uid=base36) не меняются.
+  sanitizeIds(state, uid);
+  // Валюты сущностей: чистим набор символов, подставляем базовую при неизвестном коде — защита рендера и пересчётов от мусора из импорта.
+  { const cleanCur=c=>{ c=String(c==null?'':c).replace(/[^A-Za-z0-9]/g,'').slice(0,5); return c||state.baseCurrency; };
+    state.accounts.forEach(a=>{ a.currency=cleanCur(a.currency); });
+    state.goals.forEach(g=>{ g.currency=cleanCur(g.currency); });
+    state.debts.forEach(d=>{ d.currency=cleanCur(d.currency); });
+    (state.events||[]).forEach(ev=>{ ev.currency=cleanCur(ev.currency); });
+    state.transactions.forEach(t=>{ if(t.currency) t.currency=cleanCur(t.currency); if(t.fromCurrency) t.fromCurrency=cleanCur(t.fromCurrency); if(t.toCurrency) t.toCurrency=cleanCur(t.toCurrency); }); }
   state.debtStrategy ||= 'snowball';
   state.debtBudget = state.debtBudget || 0;
   state.overAllocBaseline = state.overAllocBaseline || 0;
@@ -1958,7 +1967,7 @@ function renderDepositCalc(el){
     <div class="small-note u-mt-10" >Сложный процент, ежемесячная капитализация, пополнение в конце месяца. Прогноз примерный — при неизменных ставке и пополнении.</div>`;
 }
 /* ---------- Закрепление пунктов «Ещё» на боковой панели (ПК) ---------- */
-const PIN_META = { budgets:{i:'📊',l:'Бюджеты'}, plan:{i:'📋',l:'План на месяц'}, calendar:{i:'📅',l:'Календарь платежей'}, goals:{i:'🎯',l:'Цели'}, deposit:{i:'📈',l:'Калькулятор вклада'}, watch:{i:'🚦',l:'Лимиты и наблюдение'} };
+const PIN_META = { budgets:{i:'📊',l:'Бюджеты'}, reports:{i:'📑',l:'Отчёты'}, plan:{i:'📋',l:'План на месяц'}, calendar:{i:'📅',l:'Календарь платежей'}, goals:{i:'🎯',l:'Цели'}, deposit:{i:'📈',l:'Калькулятор вклада'}, watch:{i:'🚦',l:'Лимиты и наблюдение'} };
 function getPins(){ try{ return JSON.parse(localStorage.getItem('konverty_pins')||'[]').filter(k=>PIN_META[k]); }catch(e){ return []; } }
 function savePins(a){ try{ localStorage.setItem('konverty_pins', JSON.stringify(a)); }catch(e){} }
 function togglePin(key, ev){ if(ev) ev.stopPropagation(); const p=getPins(); const i=p.indexOf(key); if(i>=0)p.splice(i,1); else p.push(key); savePins(p);
@@ -1982,6 +1991,7 @@ function renderMore() {
   if (moreView==='deposit') return renderDepositCalc(el);
   if (moreView==='plan') return renderPlan(el);
   if (moreView==='budgets') return renderBudgets(el);
+  if (moreView==='reports') return renderReports(el);
   if (moreView==='watch') return renderWatch(el);
   if (moreView==='appearance') return renderAppearance(el);
   if (moreView==='backups') return renderBackups(el);
@@ -1990,6 +2000,7 @@ function renderMore() {
     <div class="scr-title">Ещё</div>
     <div class="menu-item" onclick="openMore('budgets')"><span class="mi">📊</span><span class="mlbl">Бюджеты</span>${pinBtn('budgets')}<span class="ar">›</span></div>
     <div class="menu-item" onclick="openMore('plan')"><span class="mi">📋</span><span class="mlbl">План на месяц</span>${pinBtn('plan')}<span class="ar">›</span></div>
+    <div class="menu-item" onclick="openMore('reports')"><span class="mi">📑</span><span class="mlbl">Отчёты за период</span>${pinBtn('reports')}<span class="ar">›</span></div>
     <div class="menu-item" onclick="openMore('calendar')"><span class="mi">📅</span><span class="mlbl">Календарь платежей</span>${pinBtn('calendar')}<span class="ar">›</span></div>
     <div class="menu-item" onclick="openMore('goals')"><span class="mi">🎯</span><span class="mlbl">Цели-накопления</span>${pinBtn('goals')}<span class="ar">›</span></div>
     <div class="menu-item" onclick="openMore('deposit')"><span class="mi">📈</span><span class="mlbl">Калькулятор вклада</span>${pinBtn('deposit')}<span class="ar">›</span></div>
@@ -3330,7 +3341,7 @@ function renderSync(el){
         <div class="row"><span class="muted">Последняя синхронизация</span><span class="u-fw-600">${lastStr}</span></div></div>
       <button class="btn" onclick="syncNow(false)">🔄 Синхронизировать сейчас</button>
       <button class="btn sec u-mt-10"  onclick="syncDisconnect()">Отключить на этом устройстве</button>
-      <div class="small-note u-mt-12" >Данные в твоём приватном GitHub Gist. Приложение выгружает изменения само и подтягивает их при запуске. Если менял на двух устройствах — изменения <b>объединяются</b> по операциям (ничего не теряется; удаления тоже переносятся). Перед объединением создаётся резервная копия.</div>
+      <div class="small-note u-mt-12" >Данные в твоём приватном GitHub Gist. Приложение выгружает изменения само и подтягивает их при запуске. Если менял на двух устройствах — добавления, операции и удаления <b>объединяются</b> (не теряются). Если одну и ту же запись правил на обоих устройствах одновременно — останется более поздняя правка. Перед объединением создаётся резервная копия.</div>
       <div class="small-note u-mt-8" >Второе устройство: открой этот экран там и вставь <b>тот же токен</b> — оно найдёт тот же Gist автоматически.</div>
     `:`
       <div class="small-note u-mb-12" >Синхронизация ПК↔телефон через твой приватный <b>GitHub Gist</b>. Нужен токен с правом «gist» — он хранится только на этом устройстве и в сам Gist не попадает.</div>
@@ -3751,6 +3762,43 @@ function watchSpent(w, ym){ const list=state.transactions.filter(t=>t.date.slice
   if(w.type==='category') return list.reduce((s,t)=>{ for(const p of txParts(t)){ if(p.categoryId===w.value) s=s+toBaseAt(p.amount,t.currency,t.date); } return s; },0);
   return list.filter(t=>txTags(t).includes(w.value)).reduce((s,t)=>s+toBaseAt(t.amount,t.currency,t.date),0); }
 // Единый раздел «Бюджеты»: сводит воедино цель/лимит конвертов и лимиты категорий (watchlists). Данные НЕ мигрируются — это общий экран поверх существующих механизмов.
+/* ---------- Отчёты за период ---------- */
+let reportPeriod='month';
+function reportShiftYm(ym,d){ let [y,m]=ym.split('-').map(Number); m+=d; while(m<1){m+=12;y--;} while(m>12){m-=12;y++;} return `${y}-${String(m).padStart(2,'0')}`; }
+function reportRange(){
+  const nowYm=todayISO().slice(0,7);
+  if(reportPeriod==='prev'){ const p=reportShiftYm(nowYm,-1); return [p,p]; }
+  if(reportPeriod==='quarter') return [reportShiftYm(nowYm,-2), nowYm];
+  if(reportPeriod==='year') return [reportShiftYm(nowYm,-11), nowYm];
+  if(reportPeriod==='all'){ let min=nowYm; for(const t of state.transactions){ const ym=(t.date||'').slice(0,7); if(ym && ym<min) min=ym; } return [min, nowYm]; }
+  return [nowYm, nowYm];
+}
+function reportSetPeriod(p){ reportPeriod=p; renderMore(); }
+function renderReports(el){
+  const [fromYm,toYm]=reportRange();
+  const rep=periodReport(fromYm,toYm);
+  const presets=[['month','Этот месяц'],['prev','Прошлый'],['quarter','3 мес'],['year','12 мес'],['all','Всё время']];
+  const chips=presets.map(([k,l])=>`<button class="chip ${reportPeriod===k?'active':''}" aria-pressed="${reportPeriod===k}" onclick="reportSetPeriod('${k}')">${l}</button>`).join('');
+  const label = fromYm===toYm ? monthLabel(fromYm) : `${monthLabel(fromYm)} — ${monthLabel(toYm)}`;
+  const catList=(map)=>{ const ents=Object.entries(map).filter(([,v])=>v>0.005).sort((a,b)=>b[1]-a[1]); if(!ents.length) return '<div class="empty inline">Нет данных за период</div>';
+    const total=ents.reduce((s,[,v])=>s+v,0);
+    return ents.map(([cid,v])=>{ const c=catById(cid); const pc=total>0?Math.round(v/total*100):0; const col=c?c.color:'#94a3b8';
+      return `<div class="card tight u-mb-8">
+        <div class="row u-g-10"><span class="grow u-fw-600">${c?esc(c.icon+' '+c.name):'Без категории'}</span><b>${fmtBase(v)}</b><span class="muted u-ml-6">${pc}%</span></div>
+        <div class="prog sm"><i style="width:${Math.max(2,pc)}%;background:${col}"></i></div></div>`; }).join(''); };
+  el.innerHTML=`<button class="back-btn" onclick="backMore()">‹ Назад</button><h2 class="u-m-0-4-12">📑 Отчёты за период</h2>
+    <div class="chips u-mb-12">${chips}</div>
+    <div class="small-note u-m-0-2-10">${label}</div>
+    <div class="card u-mb-12">
+      <div class="row"><span class="muted">Доходы</span><span class="green u-fw-800">${fmtBase(rep.income)}</span></div>
+      <div class="row u-mt-6"><span class="muted">Расходы</span><span class="red u-fw-800">${fmtBase(rep.expense)}</span></div>
+      <div class="row u-mt-6"><span class="u-fw-700">Итог (нетто)</span><span class="${rep.net>=0?'green':'red'} u-fw-800">${fmtBase(rep.net)}</span></div>
+    </div>
+    <div class="section-title">Расходы по категориям</div>
+    ${catList(rep.expByCat)}
+    <div class="section-title u-mt-14">Доходы по категориям</div>
+    ${catList(rep.incByCat)}`;
+}
 function renderBudgets(el){
   const ym=todayISO().slice(0,7); const sym=cur(state.baseCurrency).symbol;
   const envRows=activeEnvelopes().map(e=>{
@@ -4051,7 +4099,7 @@ document.addEventListener('scroll', lpCancel, {passive:true});
 
 /* H6: делаем div-«кнопки» доступными с клавиатуры (role/tabindex + Enter/Space) и озвучиваем иконки (aria-label) */
 (function(){
-  const SEL='.op,.acc,.env,.menu-item,.cat-item,.fund-row,.echip,.chip,.theme-card,.cat-line';
+  const SEL='.op,.acc,.env,.menu-item,.cat-item,.fund-row,.echip,.chip,.theme-card,.cat-line,.he-row,.duo-tap';
   const markOne=el=>{ if(el.nodeType!==1||!el.matches) return;
     if(el.matches(SEL)&&!el.hasAttribute('role')){ el.setAttribute('role','button'); el.tabIndex=0; }
     if(el.matches('.icon-btn[title]')&&!el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.getAttribute('title')); };
