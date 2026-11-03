@@ -175,6 +175,34 @@ function computeIncome(amount, mainAccountId) {
   return { accountCredits, distribution: distribute(remainder), distCurrency:mainCur, remainder, offTop, mainCur };
 }
 
+/* ---------- Синхронизация: слияние состояний ---------- */
+// Чистая функция трёхстороннего слияния (used by syncNow). Объединяет коллекции по id,
+// конфликты одного id разрешает в пользу стороны с бОльшим rev, удаления уважает через tombstones.
+// Скаляры/настройки берутся со стороны с бОльшим rev. Детерминирована → тестируется в Deno.
+function mergeStates(local, remote){
+  if(!remote || typeof remote!=='object') return local;
+  if(!local  || typeof local!=='object')  return remote;
+  const lRev=+local.rev||0, rRev=+remote.rev||0;
+  const newer = lRev>=rRev ? local  : remote;
+  const older = lRev>=rRev ? remote : local;
+  const out = Object.assign({}, newer);               // скаляры/настройки — со стороны с бОльшим rev
+  // Объединяем «надгробия» удалений: по каждому id — максимальная метка времени
+  const tomb = Object.assign({}, older.tombstones||{});
+  const nt = newer.tombstones||{};
+  for(const id in nt){ if(!(id in tomb) || nt[id]>tomb[id]) tomb[id]=nt[id]; }
+  out.tombstones = tomb;
+  // Коллекции по id: объединение (newer перезаписывает конфликт), удалённые (в tomb) исключаем
+  const COLLS=['transactions','accounts','envelopes','categories','debts','recurring','goals','events','watchlists','templates'];
+  for(const coll of COLLS){
+    const map=new Map();
+    for(const it of (older[coll]||[])) if(it && it.id!=null) map.set(String(it.id), it);
+    for(const it of (newer[coll]||[])) if(it && it.id!=null) map.set(String(it.id), it);
+    out[coll] = [...map.values()].filter(it => !(String(it.id) in tomb));
+  }
+  out.rev = Math.max(lRev, rRev);
+  return out;
+}
+
 // Экспорт для не-браузерных сред (Deno/Node) — чтобы тесты могли дотянуться до функций.
 // В браузере есть globalThis.document → блок пропускается, на приложение не влияет.
 if (typeof globalThis.document === 'undefined') {
@@ -182,5 +210,5 @@ if (typeof globalThis.document === 'undefined') {
     txParts, activeAccounts, spendableAccounts, investmentAccounts, activeEnvelopes,
     _computeBalances, computeBalances, sumBase, accountBase, envelopeBase, owedBase, totalNet, spendableTotal,
     envelopesTotal, totalOwed, goalsReservedBase, committedEnvelopes, freeMoney, unallocated,
-    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome };
+    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome, mergeStates };
 }
