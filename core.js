@@ -211,6 +211,16 @@ function mergeStates(local, remote){
   return out;
 }
 
+// Решение синхронизации по ревизиям (чистое, тестируется интеграционным стендом): что делать.
+// base — ревизия, которая на момент прошлой синхронизации была и локально, и в облаке.
+function syncDecide(localRev, remoteRev, base, hasRemote){
+  if(!hasRemote) return 'push';                              // облака нет/пустое → выгрузить локальное
+  if(localRev===base && remoteRev!==base) return 'adopt';    // менялось только облако → загрузить
+  if(remoteRev===base && localRev!==base) return 'push';     // менялось только локально → выгрузить
+  if(localRev===base && remoteRev===base) return 'noop';     // никто не менялся
+  return 'merge';                                            // менялись обе стороны → слить
+}
+
 // Санитайз id всех сущностей (импорт/синк могут принести id со спецсимволами → инъекция в onclick/атрибуты).
 // Приводим к безопасному набору [A-Za-z0-9_-], согласованно обновляя ВСЕ ссылки. Для чистых данных (uid=base36) — no-op.
 function sanitizeIds(state, uidFn){
@@ -256,28 +266,57 @@ function csvDedupKey(date, amt, note, isInc, acctId, curc){
   return `${date}|${round2(amt)}|${String(note||'').trim().toLowerCase()}|${isInc?'i':'e'}|${acctId||''}|${curc||''}`;
 }
 
-/* ---------- SMS-парсер суммы (пункт 3.4) ---------- */
-// Берём сумму ОПЕРАЦИИ (покупки/списания), а не остаток/доступно: число рядом со словом-остатком не выбираем.
+/* ---------- Проверка целостности состояния (пункт P0.1) ---------- */
+// Строгая схема: не принимаем пустой объект/null/массив/битый JSON как состояние приложения
+// (иначе облако «{}» или повреждённый gist затёр бы локальную историю через normalize()).
+function isValidState(s){
+  if(!s || typeof s!=='object' || Array.isArray(s)) return false;
+  if(typeof s.baseCurrency!=='string' || !s.baseCurrency) return false;
+  if(!Array.isArray(s.currencies) || !s.currencies.length) return false;
+  for(const k of ['transactions','accounts','envelopes','categories']){ if(!Array.isArray(s[k])) return false; }
+  // Углублённая проверка (P0): валюты — непустой code + конечный положительный rate; базовая валюта обязана присутствовать.
+  const codes=new Set();
+  for(const c of s.currencies){ if(!c || typeof c.code!=='string' || !c.code) return false;
+    if(!(typeof c.rate==='number' && isFinite(c.rate) && c.rate>0)) return false; codes.add(c.code); }
+  if(!codes.has(s.baseCurrency)) return false;
+  // Справочники — объекты с непустым id.
+  for(const k of ['accounts','envelopes','categories']){ for(const it of s[k]){ if(!it || typeof it!=='object' || it.id==null || String(it.id)==='') return false; } }
+  // Транзакции — объект с непустым id, известным типом и конечной суммой (если задана).
+  const TYPES=new Set(['income','expense','transfer','envtransfer','envfund','adjust','envadjust']);
+  for(const t of s.transactions){ if(!t || typeof t!=='object' || t.id==null) return false; if(!TYPES.has(t.type)) return false;
+    if(t.amount!=null && !(typeof t.amount==='number' && isFinite(t.amount))) return false; }
+  return true;
+}
+
+/* ---------- SMS-парсер суммы (пункты 3.4 / P1.1) ---------- */
+// Берём сумму ОПЕРАЦИИ (покупки/списания), а не остаток/доступно. Сначала вырезаем даты/время/маски карт,
+// чтобы их цифры не слиплись с суммой (напр. «2026-11-03 4 500 KZT» не должно давать 34500).
 function smsAmount(text){
-  text=String(text).replace(/ /g,' ');
+  let s=String(text).replace(/ /g,' ');
+  s=s.replace(/\d{4}-\d{2}-\d{2}/g,' ')                 // ISO-дата 2026-11-03
+     .replace(/\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}/g,' ')    // дата 03.11.2026 / 03/11/26
+     .replace(/\d{1,2}:\d{2}(?::\d{2})?/g,' ')           // время 18:32[:00]
+     .replace(/\*+\d+|\d+\*+/g,' ');                     // маски карт *1234 / 1234*
   const BAL=/(доступн|остаток|бала?нс|dostupno|available|balance|ostatok)/i;
+  const OP=/(покупк|списан|оплат|снят|расход|перевод|pokupka|oplata|spisanie|perevod|withdraw|debit|payment)/i;
   const re=/(\d[\d\s]{0,12}(?:[.,]\d{1,2})?)\s*(₸|тг|тнг|тенге|руб|₽|грн|₴|\$|usd|eur|€|kzt|rub|uah)/gi;
   let m; const hits=[];
-  while((m=re.exec(text))){ const n=parseFloat(m[1].replace(/\s/g,'').replace(',','.')); if(isNaN(n)) continue;
-    const before=text.slice(Math.max(0,m.index-24), m.index); hits.push({n, bal:BAL.test(before)}); }
-  if(hits.length){ const op=hits.filter(h=>!h.bal); return round2((op.length?op[0]:hits[0]).n); }
+  while((m=re.exec(s))){ const n=parseFloat(m[1].replace(/\s/g,'').replace(',','.')); if(isNaN(n)) continue;
+    const before=s.slice(Math.max(0,m.index-24), m.index); hits.push({n, bal:BAL.test(before), op:OP.test(before)}); }
+  if(hits.length){ const pool=hits.filter(h=>!h.bal).length?hits.filter(h=>!h.bal):hits;   // сначала отбрасываем «остаток/доступно»
+    const near=pool.filter(h=>h.op);                                                      // предпочитаем число рядом со словом операции
+    return round2((near.length?near[0]:pool[0]).n); }
   // запасной вариант — самое большое число, не являющееся маской карты (*1234)
   const nums=[]; let mm; const re2=/(^|[^\d*])(\d[\d\s]{0,12}(?:[.,]\d{1,2})?)/g;
-  while((mm=re2.exec(text))){ const n=parseFloat(mm[2].replace(/\s/g,'').replace(',','.')); if(!isNaN(n)) nums.push(n); }
+  while((mm=re2.exec(s))){ const n=parseFloat(mm[2].replace(/\s/g,'').replace(',','.')); if(!isNaN(n)) nums.push(n); }
   return nums.length? round2(Math.max(...nums)) : null;
 }
 
-// Экспорт для не-браузерных сред (Deno/Node) — чтобы тесты могли дотянуться до функций.
-// В браузере есть globalThis.document → блок пропускается, на приложение не влияет.
-if (typeof globalThis.document === 'undefined') {
-  globalThis.KonvertyCore = { cur, round2, fmt, toBase, rateAt, toBaseAt, fmtBase, convert, convertAt, accCur, acc, env, catById,
+// Единое пространство функций ядра. Выставляем ВСЕГДА (и в Deno/Node, и в браузере) — так и tests.html,
+// и core.test.js берут ОДИН и тот же набор (пункт P1.7: раньше tests.html собирал C вручную и отставал).
+// В приложении это просто дополнительный глобальный объект-ссылка, на логику не влияет.
+globalThis.KonvertyCore = { cur, round2, fmt, toBase, rateAt, toBaseAt, fmtBase, convert, convertAt, accCur, acc, env, catById,
     txParts, activeAccounts, spendableAccounts, investmentAccounts, activeEnvelopes,
     _computeBalances, computeBalances, sumBase, accountBase, envelopeBase, owedBase, totalNet, spendableTotal,
     envelopesTotal, totalOwed, goalsReservedBase, committedEnvelopes, freeMoney, unallocated,
-    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome, mergeStates, periodReport, sanitizeIds, csvDedupKey, smsAmount };
-}
+    envSpentInMonth, envFundedInMonth, avgDailySpendBase, distribute, computeIncome, mergeStates, periodReport, sanitizeIds, csvDedupKey, smsAmount, isValidState, syncDecide };

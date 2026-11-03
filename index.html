@@ -988,7 +988,7 @@ function defaultState() {
 /* ---------- Загрузка / сохранение ---------- */
 let state;
 let dataStamp=0, _balCache=null, _balCacheAt=-1;   // штамп изменений данных + мемоизация балансов
-const APP_VERSION='1.0.1';  // РЕЛИЗ 1.0. Патч — мелкая правка, минор — крупное изменение.
+const APP_VERSION='1.0.3';  // РЕЛИЗ 1.0. Патч — мелкая правка, минор — крупное изменение.
 const BUILD='2026-11-03';    // дата сборки — меняется каждый релиз, чтобы было видно, подгрузилось ли обновление
 function load() {
   let raw=null;
@@ -1023,7 +1023,7 @@ function normalize() {
   state.templates ||= [];
   // Надгробия удалений (для синхронизации): объект {id:ts}. Чистим старше 120 дней, чтобы не разрастались.
   state.tombstones = (state.tombstones && typeof state.tombstones==='object') ? state.tombstones : {};
-  { const cutoff=Date.now()-120*864e5; for(const id in state.tombstones){ const ts=+state.tombstones[id]||0; if(ts && ts<cutoff) delete state.tombstones[id]; } }
+  { const cutoff=Date.now()-400*864e5; for(const id in state.tombstones){ const ts=+state.tombstones[id]||0; if(ts && ts<cutoff) delete state.tombstones[id]; } }   // P1: надгробия лёгкие — держим ~13 мес, чтобы редко-подключаемое устройство не воскрешало удалённое
   // H6 (безопасность): id сущностей → безопасный набор (импорт/синк могут принести опасные id → инъекция в onclick/атрибуты). Чистые данные (uid=base36) не меняются.
   sanitizeIds(state, uid);
   // Валюты сущностей: чистим набор символов, подставляем базовую при неизвестном коде — защита рендера и пересчётов от мусора из импорта.
@@ -1102,20 +1102,24 @@ function _req(rq){ return new Promise((res,rej)=>{ rq.onsuccess=()=>res(rq.resul
 async function _bkStore(mode){ const db=await idbOpen(); const tx=db.transaction(IDB_STORE,mode);
   return { store:tx.objectStore(IDB_STORE), done:new Promise((res,rej)=>{ tx.oncomplete=res; tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); }) }; }
 function _lsBackupsGet(){ try{ return JSON.parse(localStorage.getItem(LS_BK)||'[]'); }catch(e){ return []; } }
-function _lsBackupsPut(list){ try{ localStorage.setItem(LS_BK, JSON.stringify(list.slice(-3))); }catch(e){} }
+function _lsBackupsPut(list){ try{ localStorage.setItem(LS_BK, JSON.stringify(list.slice(-3))); return true; }catch(e){ return false; } }   // P0.2: честный успех/провал
 
 async function createBackup(reason){
   const snap={ id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7), ts:new Date().toISOString(), reason:reason||'auto', app:APP_VERSION, data:JSON.stringify(state) };
+  let ok=false;
   try{
     // 1) сохранить снапшот (отдельная транзакция)
     { const {store,done}=await _bkStore('readwrite'); store.put(snap); await done; }
+    ok=true;   // IndexedDB-транзакция завершилась без ошибки
     // 2) вычислить лишние авто-копии (чтение — своя транзакция)
     const all=await getBackups();
     const autos=all.filter(b=>b.reason==='auto').sort((a,b)=>a.ts.localeCompare(b.ts)); // старые первыми
     const toDel = autos.length>BK_KEEP_AUTO ? autos.slice(0, autos.length-BK_KEEP_AUTO).map(b=>b.id) : [];
     // 3) удалить лишние (все delete синхронно в одной свежей транзакции)
     if(toDel.length){ const {store,done}=await _bkStore('readwrite'); toDel.forEach(id=>store.delete(id)); await done; }
-  }catch(e){ const list=_lsBackupsGet(); list.push(snap); _lsBackupsPut(list); }
+  }catch(e){ const list=_lsBackupsGet(); list.push(snap); ok=_lsBackupsPut(list); }   // fallback в localStorage
+  // P0.2: не врём об успехе — если ни одно хранилище не приняло копию, это ошибка.
+  if(!ok) throw new Error('backup-failed');
   return snap;
 }
 async function getBackups(){ try{ const {store}=await _bkStore('readonly'); const all=await _req(store.getAll()); return (all||[]).sort((a,b)=>b.ts.localeCompare(a.ts)); }catch(e){ return _lsBackupsGet().sort((a,b)=>b.ts.localeCompare(a.ts)); } }
@@ -1127,8 +1131,9 @@ async function dailyBackup(){ try{ const bks=await getBackups(); const today=new
 async function restoreBackup(id){
   const bks=await getBackups(); const snap=bks.find(b=>b.id===id); if(!snap){ toast('Копия не найдена'); return; }
   if(!await confirmSheet(`Восстановить копию от ${new Date(snap.ts).toLocaleString('ru-RU')}? Текущие данные будут заменены (перед этим создам резервную копию).`,{okText:'Восстановить',danger:true})) return;
-  try{ await createBackup('pre-restore'); }catch(e){}
-  try{ state=JSON.parse(snap.data); normalize(); save(); toast('Восстановлено ✓'); moreView='backups'; render(); }
+  let bk=true; try{ await createBackup('pre-restore'); }catch(e){ bk=false; }
+  if(!bk && !await confirmSheet('Не удалось создать резервную копию текущих данных. Всё равно восстановить (текущие данные будут потеряны)?',{okText:'Восстановить',danger:true})) return;   // P0.2
+  try{ const parsed=JSON.parse(snap.data); if(!isValidState(parsed)) throw 0; state=parsed; normalize(); save(); toast('Восстановлено ✓'); moreView='backups'; render(); }
   catch(e){ toast('Не удалось восстановить копию'); }
 }
 function downloadBackup(id){ getBackups().then(bks=>{ const snap=bks.find(b=>b.id===id); if(!snap) return;
@@ -2942,7 +2947,14 @@ function saveEvent(id){
 async function deleteEvent(id){ if(!await confirmSheet('Удалить событие?',{okText:'Удалить',danger:true}))return; state.events=state.events.filter(e=>e.id!==id); tomb(id); save(); closeSheet(); toast('Удалено'); renderMore(); }
 function postEvent(id){ const ev=state.events.find(x=>x.id===id); if(!ev) return;
   entry=buildEntryBase('expense'); catExpanded=false; entryFirstRender=true;
-  if(ev.amount>0) entry.amtStr=String(ev.amount);
+  // P1.2: валюта события. Расход пишется в валюте счёта → если валюта события другая,
+  // подбираем счёт той же валюты, иначе пересчитываем сумму по курсу (пользователь увидит и подтвердит).
+  let amt=ev.amount;
+  if(ev.currency && ev.currency!==accCur(entry.accountId)){
+    const match=activeAccounts().find(a=>a.currency===ev.currency);
+    if(match) entry.accountId=match.id; else amt=convert(ev.amount, ev.currency, accCur(entry.accountId));
+  }
+  if(amt>0) entry.amtStr=String(round2(amt));
   if(ev.envelopeId && env(ev.envelopeId)) entry.envelopeId=ev.envelopeId;
   entry.note=ev.title; entry.date = ev.date<=todayISO()?ev.date:todayISO(); entry.eventId=id;
   renderEntry(); showSheetShell();
@@ -3051,11 +3063,11 @@ function saveDebt() {
   state.debts.push({id:uid(),direction:dir,counterparty:who,currency:code,amount:round2(amt),accountId:accId,date:todayISO(),dueDate:due,rate,note,payments:[]});
   save(); closeSheet(); toast(accId?(dir==='iowe'?'Долг добавлен, деньги зачислены ✓':'Долг добавлен, деньги списаны ✓'):'Долг добавлен'); render();
 }
-function openDebtPay(id){ const d=state.debts.find(x=>x.id===id); if(!d)return; const rem=debtRemaining(d);
+function openDebtPay(id){ const d=state.debts.find(x=>x.id===id); if(!d)return; const raw=debtRemaining(d); const rem=Math.max(0,raw), over=Math.max(0,-raw);   // P1.8: не показываем отрицательный долг — переплату выносим отдельно
   const linked=d.accountId&&acc(d.accountId);
   const accField = linked ? `<label class="field"><span>Счёт</span><select class="input" id="pay-acc">${activeAccounts().map(a=>`<option value="${a.id}" ${a.id===d.accountId?'selected':''}>${esc(a.icon+' '+a.name)} · ${a.currency}</option>`).join('')}</select></label>
     <div class="small-note u-m-n6-2-10" >${d.direction==='iowe'?'Ты возвращаешь — деньги спишутся со счёта.':'Тебе возвращают — деньги зачислятся на счёт.'}</div>` : '';
-  openSheet(`<h2>${d.direction==='iowe'?'Вернуть долг':'Принять возврат'}</h2><div class="small-note u-mb-12" >${esc(d.counterparty||'—')} · осталось <b>${fmt(rem,d.currency)}</b></div>
+  openSheet(`<h2>${d.direction==='iowe'?'Вернуть долг':'Принять возврат'}</h2><div class="small-note u-mb-12" >${esc(d.counterparty||'—')} · осталось <b>${fmt(rem,d.currency)}</b>${over>0.005?` · переплата <b>${fmt(over,d.currency)}</b>`:''}</div>
     <label class="field"><span>Сумма</span><input class="input" id="pay-amt" type="number" inputmode="decimal" value="${rem}"></label>
     ${accField}
     <button class="btn" onclick="saveDebtPay('${id}')">Внести</button><button class="btn sec u-mt-10"  onclick="closeSheet()">Отмена</button>`); }
@@ -3119,13 +3131,15 @@ function saveAccount(id) {
 }
 async function deleteAccount(id) {
   const used=state.transactions.some(t=>t.accountId===id||t.fromAccountId===id||t.toAccountId===id||(t.accountCredits&&t.accountCredits[id]))
-    || state.debts.some(d=>d.accountId===id||(d.payments||[]).some(p=>p.accountId===id));   // H6: счёт занят долгом/возвратом — он двигает баланс
+    || state.debts.some(d=>d.accountId===id||(d.payments||[]).some(p=>p.accountId===id))   // H6: счёт занят долгом/возвратом — он двигает баланс
+    || (state.recurring||[]).some(r=>r.accountId===id);   // P1.6B: регулярный платёж остался бы без счёта
   if(used){
     // H2: не удаляем счёт с операциями/долгами — иначе деньги «висят» на orphan-id и итоги разъезжаются. Только архив.
     if(await confirmSheet('По этому счёту есть операции — удалить нельзя (итоги разъедутся). Отправить в архив? Он скроется из списков, но останется в истории и балансе.',{okText:'В архив'})){ const a=acc(id); if(a){ a.archived=true; save(); toast('Счёт в архиве'); } renderMore(); }
     return;
   }
   if(!await confirmSheet('Удалить счёт?',{okText:'Удалить',danger:true}))return;
+  state.templates=(state.templates||[]).filter(t=>!(t.accountId===id||t.fromAccountId===id||t.toAccountId===id||t.incomeAccountId===id));   // P1: шаблоны не остаются с мёртвым счётом
   state.accounts=state.accounts.filter(a=>a.id!==id); tomb(id); save(); toast('Удалено'); renderMore();
 }
 
@@ -3162,7 +3176,10 @@ function saveEnvelope(id) {
   save(); closeSheet(); toast('Сохранено'); renderMore();
 }
 async function deleteEnvelope(id) {
-  const used=state.transactions.some(t=>t.envelopeId===id||t.fromEnvelopeId===id||t.toEnvelopeId===id||(t.distribution&&t.distribution[id])||(t.plan&&t.plan[id])||(Array.isArray(t.splits)&&t.splits.some(s=>s.envelopeId===id)));   // H6: учитываем split-части
+  const used=state.transactions.some(t=>t.envelopeId===id||t.fromEnvelopeId===id||t.toEnvelopeId===id||(t.distribution&&t.distribution[id])||(t.plan&&t.plan[id])||(Array.isArray(t.splits)&&t.splits.some(s=>s.envelopeId===id)))   // H6: учитываем split-части
+    ||(state.goals||[]).some(g=>g.envelopeId===id)         // P1.6A: привязанная цель
+    ||(state.events||[]).some(ev=>ev.envelopeId===id)      // P1.6A: календарное событие
+    ||(state.recurring||[]).some(r=>r.envelopeId===id);    // P1: регулярный платёж, привязанный к конверту
   if(used){
     // H2: конверт с операциями не удаляем (иначе бюджет «зависнет» и «Свободно» завысится). Только архив.
     if(await confirmSheet('По этому конверту есть операции — удалить нельзя (итоги разъедутся). Отправить в архив? Он скроется из списков, но останется в истории и балансе.',{okText:'В архив'})){ const e=env(id); if(e){ e.archived=true; save(); toast('Конверт в архиве'); } renderMore(); }
@@ -3198,6 +3215,8 @@ async function deleteCategory(id) {
   const used=state.transactions.some(t=>t.categoryId===id||(Array.isArray(t.splits)&&t.splits.some(s=>s.categoryId===id)));   // H6: учитываем split-части
   if(!await confirmSheet(used?'По категории есть операции. Они останутся без категории. Удалить?':'Удалить категорию?',{okText:'Удалить',danger:true}))return;
   if(used) state.transactions.forEach(t=>{ if(t.categoryId===id) t.categoryId=null; if(Array.isArray(t.splits)) t.splits.forEach(s=>{ if(s.categoryId===id) s.categoryId=null; }); });   // чистим ссылки → в отчётах «Без категории»
+  (state.recurring||[]).forEach(r=>{ if(r.categoryId===id) r.categoryId=null; });   // P1: регулярный платёж не остаётся с мёртвой категорией
+  state.watchlists=(state.watchlists||[]).filter(w=>!(w.type==='category'&&w.value===id));   // P1.6C: убираем лимит на удалённую категорию, чтобы он не висел «вслепую»
   state.categories=state.categories.filter(c=>c.id!==id); tomb(id); save(); toast('Удалено'); renderMore();
 }
 
@@ -3219,14 +3238,24 @@ function saveCurrency(code) {
   save(); closeSheet(); toast('Сохранено'); renderMore();
 }
 function makeBase(code){ const nb=cur(code); if(!nb||nb.rate<=0){toast('Сначала задай курс');return;}
-  // H6: смена базы НЕ мигрирует суммы, заданные в старой базе (цели/лимиты конвертов, бюджет долгов, снимки курсов) — после появления истории это исказило бы данные. Блокируем.
-  if((state.transactions&&state.transactions.length)||(state.debts&&state.debts.length)){ toast('Сменить базовую валюту можно только пока нет операций и долгов (иначе цели, лимиты и история исказятся).'); return; }
+  // H6/P1.3: смена базы НЕ мигрирует суммы, заданные в старой базе — блокируем не только при операциях/долгах,
+  // но и при любых денежных настройках (цели/лимиты конвертов, бюджет долгов, лимиты наблюдения, базлайн, снимки курсов).
+  const hasMoneySettings =
+    (state.envelopes||[]).some(e=>(+e.monthlyTarget>0)||(+e.monthlyLimit>0)) ||
+    (+state.debtBudget>0) ||
+    (state.watchlists||[]).some(w=>+w.target>0) ||
+    (+state.overAllocBaseline>0) ||
+    (state.rateHistory && Object.keys(state.rateHistory).length>0);
+  if((state.transactions&&state.transactions.length)||(state.debts&&state.debts.length)||hasMoneySettings){ toast('Сменить базовую валюту можно только пока нет операций, долгов и денежных настроек (цели/лимиты/бюджеты/курсы) — иначе суммы в старой базе исказятся.'); return; }
   const factor=nb.rate; state.currencies.forEach(c=>{ c.rate=c.code===code?1:c.rate/factor; }); state.baseCurrency=code; save(); closeSheet(); toast('Базовая: '+code); renderMore(); }
 async function deleteCurrency(code){ if(code===state.baseCurrency){toast('Нельзя удалить базовую');return;}
   if(state.accounts.some(a=>a.currency===code)){ toast('Валюта используется счётом'); return; }
   if(state.goals.some(g=>g.currency===code)){ toast('Валюта используется целью'); return; }   // M17
-  const used=state.transactions.some(t=>t.currency===code||t.fromCurrency===code||t.toCurrency===code)||state.debts.some(d=>d.currency===code);
-  if(used){ toast('Валюта есть в операциях/долгах — удалить нельзя (иначе история пересчитается по курсу 1).'); return; }   // H6: не оставляем историю без курса
+  const used=state.transactions.some(t=>t.currency===code||t.fromCurrency===code||t.toCurrency===code)
+    ||state.debts.some(d=>d.currency===code)
+    ||(state.events||[]).some(ev=>ev.currency===code)       // P1.4
+    ||(state.templates||[]).some(tp=>tp.currency===code);   // P1.4
+  if(used){ toast('Валюта есть в операциях/долгах/событиях/шаблонах — удалить нельзя (иначе история пересчитается по курсу 1).'); return; }   // H6: не оставляем историю без курса
   if(!await confirmSheet('Удалить валюту?',{okText:'Удалить',danger:true}))return;
   state.currencies=state.currencies.filter(c=>c.code!==code); save(); toast('Удалено'); renderMore(); }
 
@@ -3256,13 +3285,13 @@ async function updateRates() {
 
 /* ---------- Экспорт / импорт / сброс ---------- */
 /* ================= Синхронизация через GitHub Gist =================
-   Данные хранятся в приватном Gist пользователя. Токен — только локально (в Gist НЕ уходит).
+   Данные хранятся в secret-Gist пользователя (secret ≠ приватный: доступен по ссылке; БЕЗ шифрования). Токен — только локально (в Gist НЕ уходит).
    Модель слияния: last-write-wins по state.rev (wall-clock). Перед заменой локальных данных — бэкап. */
 const SYNC_KEY='konverty_sync';         // {token, gistId}
 const SYNC_TS_KEY='konverty_sync_at';   // когда последний раз синхронизировались (для UI)
 const SYNC_BASE_KEY='konverty_sync_base'; // ревизия на момент последней синхронизации (для трёхстороннего слияния)
 const SYNC_FILE='konverty_state.json';
-let _syncTimer=null, _syncing=false;
+let _syncTimer=null, _syncing=false, _syncPending=false;
 function syncCfg(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY)||'null'); }catch(e){ return null; } }
 function syncSetCfg(c){ try{ if(c) localStorage.setItem(SYNC_KEY, JSON.stringify(c)); else localStorage.removeItem(SYNC_KEY); }catch(e){} }
 function syncConfigured(){ const c=syncCfg(); return !!(c && c.token && c.gistId); }
@@ -3286,16 +3315,20 @@ async function syncConnect(token){
     syncSetCfg({token, gistId});
     // Присоединение к существующему Gist → принимаем облако целиком (не сливаем — иначе задвоятся дефолтные счета/конверты нового устройства).
     if(created){ const pr=await syncPush(); syncSetBase(pr); }
-    else { const remote=await syncPull(); if(remote){ await syncAdopt(remote); syncSetBase(+remote.rev||0); } else { const pr=await syncPush(); syncSetBase(pr); } }
+    else { const remote=await syncPull(); if(remote){ if(await syncAdopt(remote)) syncSetBase(+remote.rev||0); } else { const pr=await syncPush(); syncSetBase(pr); } }   // P0.1: невалидное облако → syncPull вернёт null → выгружаем локальное (чиним gist)
     syncMarkAt();
     return true;
-  }catch(e){ syncSetCfg(null); toast('Не удалось подключить (проверь токен и право «gist»)'); return false; }
+  }catch(e){ syncSetCfg(null);
+    if(e && e.message==='corrupt'){ toast('Облако повреждено — подключение отменено. Проверь gist.'); return false; }   // P0: не выгружаем локальное поверх битого облака
+    toast('Не удалось подключить (проверь токен и право «gist»)'); return false; }
 }
 async function syncPull(){ const c=syncCfg(); if(!c||!c.gistId) return null;
   const r=await _gh('/gists/'+c.gistId); if(!r.ok) throw new Error('pull'); const g=await r.json();
-  const f=g.files&&g.files[SYNC_FILE]; if(!f) return null;
+  const f=g.files&&g.files[SYNC_FILE]; if(!f) return null;   // файла нет → облако «пустое»/новое (безопасно выгрузить локальное)
   let content=f.content; if(f.truncated && f.raw_url){ const rr=await fetch(f.raw_url); content=await rr.text(); }
-  try{ return JSON.parse(content); }catch(e){ return null; } }
+  let data=null; try{ data=JSON.parse(content); }catch(e){ data=null; }
+  if(!isValidState(data)) throw new Error('corrupt');   // P0: файл ЕСТЬ, но содержимое битое → НЕ «нет облака», не затираем его локальным
+  return data; }   // P0.1: битое/пустое облако = как будто облака нет (не затираем локальное)
 async function syncPush(){ const c=syncCfg(); if(!c||!c.gistId) return 0;
   const rev=+state.rev||0;   // фиксируем выгружаемую ревизию синхронно с телом
   const body={files:{[SYNC_FILE]:{content:JSON.stringify(state)}}};
@@ -3304,41 +3337,54 @@ async function syncPush(){ const c=syncCfg(); if(!c||!c.gistId) return 0;
 // По ней понимаем, какая сторона менялась: только местная → выгрузить; только облако → загрузить; обе → слить.
 function syncBase(){ try{ return +localStorage.getItem(SYNC_BASE_KEY)||0; }catch(e){ return 0; } }
 function syncSetBase(r){ try{ localStorage.setItem(SYNC_BASE_KEY, String(+r||0)); }catch(e){} }
+// P0: честная локальная запись — отметку синхронизации двигаем только если state реально сохранён.
+function persistState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); return true; }catch(e){ return false; } }
 // Принять облачное состояние целиком (с бэкапом перед заменой) — для присоединения устройства и fast-path «менялось только облако».
-async function syncAdopt(remote){ try{ await createBackup('pre-sync'); }catch(e){} state=remote; normalize(); try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} dataStamp++; _balCache=null; render(); }
+async function syncAdopt(remote){
+  if(!isValidState(remote)) return false;   // P0.1: не затираем локальные данные невалидным облаком
+  let backedUp=true; try{ await createBackup('pre-sync'); }catch(e){ backedUp=false; }
+  if(!backedUp && state && state.transactions && state.transactions.length){ toast('Не удалось сделать резервную копию — загрузка с облака отменена'); return false; }   // P0.2
+  state=remote; normalize(); const okp=persistState(); dataStamp++; _balCache=null; render();
+  if(!okp){ toast('Не удалось сохранить локально — отметка синхронизации не обновлена'); return false; }   // P0: не отмечаем синхронизацию без реальной записи
+  return true; }
 // Трёхстороннее слияние. По base (ревизия последней синхронизации) определяем, что менялось:
 // только локально → выгрузить; только облако → загрузить; обе стороны → слить операции/надгробия (mergeStates).
 async function syncNow(silent, opts){
   opts=opts||{};
   if(!syncConfigured()){ if(!silent) toast('Синхронизация не подключена'); return; }
-  if(_syncing) return; _syncing=true;
+  if(_syncing){ _syncPending=true; return; } _syncing=true;   // P1.5: изменение во время sync не теряем — переочередим в finally
   try{
     const remote=await syncPull();
     const localRev=+state.rev||0, remoteRev=remote?(+remote.rev||0):-1, base=syncBase();
-    if(!remote){
-      const pr=await syncPush(); syncSetBase(pr); syncMarkAt(); if(!silent) toast('Выгружено в облако ✓');
-    } else if(localRev===base && remoteRev!==base){
-      await syncAdopt(remote); syncSetBase(remoteRev); syncMarkAt(); toast('Загружено с облака ✓');
-    } else if(remoteRev===base && localRev!==base){
-      const pr=await syncPush(); syncSetBase(pr); syncMarkAt(); if(!silent) toast('Выгружено в облако ✓');
-    } else if(localRev===base && remoteRev===base){
+    const act=syncDecide(localRev, remoteRev, base, !!remote);   // чистое решение из core.js (тестируется интеграционным стендом)
+    if(act==='push'){
+      const pr=await syncPush(); if(persistState()) syncSetBase(pr); syncMarkAt(); if(!silent) toast('Выгружено в облако ✓');
+    } else if(act==='adopt'){
+      if(await syncAdopt(remote)){ syncSetBase(remoteRev); syncMarkAt(); toast('Загружено с облака ✓'); }
+    } else if(act==='noop'){
       syncMarkAt(); if(!silent) toast('Уже синхронизировано');
     } else {
       // Обе стороны менялись (напр. правки офлайн на двух устройствах) → объединяем без потерь.
-      try{ await createBackup('pre-sync'); }catch(e){}
+      let okbk=true; try{ await createBackup('pre-sync'); }catch(e){ okbk=false; }
+      if(!okbk){ toast('Не удалось сделать резервную копию — слияние отменено'); return; }   // P0-d: не сливаем без обязательной копии
       const merged=mergeStates(state, remote); merged.rev=Date.now();
-      state=merged; normalize(); try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} dataStamp++; _balCache=null; render();
+      state=merged; normalize(); dataStamp++; _balCache=null; render();
+      if(!persistState()){ toast('Не удалось сохранить локально — слияние не отмечено как синхронизированное'); return; }   // P0-c
       const pr=await syncPush(); syncSetBase(pr); syncMarkAt(); toast('Объединено с облаком ✓');
     }
     // Авто-платежи проводим ПОСЛЕ синхронизации, на свежем общем состоянии (не на фоновом авто-пуше).
     if(!opts.skipRecurring){ try{ const n=autoPostDueRecurring(); if(n){ _balCache=null; render(); const pr=await syncPush(); syncSetBase(pr); syncMarkAt(); toast(`Автоматически проведено: ${n}`); } }catch(e){} }
     if(currentTab==='more'&&moreView==='sync') renderMore();
-  }catch(e){ if(!silent) toast('Ошибка синхронизации — проверь сеть и токен'); }
-  finally{ _syncing=false; }
+  }catch(e){
+    if(e && e.message==='corrupt'){ toast('Облако повреждено — синхронизация отменена. Проверь gist или переподключись.'); return; }   // P0: не затираем и не повторяем
+    if(!silent) toast('Ошибка синхронизации — проверь сеть и токен');
+    if(!opts._retried && navigator.onLine!==false){ setTimeout(()=>syncNow(true,{skipRecurring:true,_retried:true}), 4000); } }   // P1.5: один отложенный повтор после сетевой ошибки
+  finally{ _syncing=false; if(_syncPending){ _syncPending=false; setTimeout(()=>syncNow(true,{skipRecurring:true}), 300); } }   // P1.5: догоняем изменение, сделанное во время sync
 }
 // Фоновая синхронизация после правки: идёт через syncNow (с слиянием), чтобы авто-выгрузка не затирала изменения другого устройства.
 function syncPushDebounced(){ if(!syncConfigured()) return; clearTimeout(_syncTimer); _syncTimer=setTimeout(()=>{ syncNow(true, {skipRecurring:true}); }, 2500); }
 function syncOnLoad(){ if(syncConfigured()) setTimeout(()=>syncNow(true), 400); }
+window.addEventListener('online', ()=>{ if(syncConfigured()) syncNow(true); });   // P1.5: синхронизируемся при восстановлении сети
 function syncDisconnect(){ syncSetCfg(null); try{ localStorage.removeItem(SYNC_TS_KEY); localStorage.removeItem(SYNC_BASE_KEY); }catch(e){} toast('Синхронизация отключена'); renderMore(); }
 function renderSync(el){
   const cfg=syncConfigured(); const last=syncLastAt();
@@ -3349,10 +3395,10 @@ function renderSync(el){
         <div class="row"><span class="muted">Последняя синхронизация</span><span class="u-fw-600">${lastStr}</span></div></div>
       <button class="btn" onclick="syncNow(false)">🔄 Синхронизировать сейчас</button>
       <button class="btn sec u-mt-10"  onclick="syncDisconnect()">Отключить на этом устройстве</button>
-      <div class="small-note u-mt-12" >Данные в твоём приватном GitHub Gist. Приложение выгружает изменения само и подтягивает их при запуске. Если менял на двух устройствах — добавления, операции и удаления <b>объединяются</b> (не теряются). Если одну и ту же запись правил на обоих устройствах одновременно — останется более поздняя правка. Перед объединением создаётся резервная копия.</div>
+      <div class="small-note u-mt-12" >Данные в твоём <b>secret GitHub Gist</b> (без шифрования — кто знает ссылку, увидит содержимое). Приложение выгружает изменения само и подтягивает их при запуске. Если менял на двух устройствах — добавления, операции и удаления <b>объединяются</b> (не теряются). Если одну и ту же запись правил на обоих устройствах одновременно — останется более поздняя правка. Перед объединением создаётся резервная копия.</div>
       <div class="small-note u-mt-8" >Второе устройство: открой этот экран там и вставь <b>тот же токен</b> — оно найдёт тот же Gist автоматически.</div>
     `:`
-      <div class="small-note u-mb-12" >Синхронизация ПК↔телефон через твой приватный <b>GitHub Gist</b>. Нужен токен с правом «gist» — он хранится только на этом устройстве и в сам Gist не попадает.</div>
+      <div class="small-note u-mb-12" >Синхронизация ПК↔телефон через твой <b>secret GitHub Gist</b> (не «приватный»: по ссылке виден, данные пока без шифрования). Нужен токен с правом «gist» — он хранится только на этом устройстве и в сам Gist не попадает.</div>
       <div class="card tight u-mb-12" >
         <div class="u-fw-700_mb-6">Как получить токен (~1 минута)</div>
         <div class="small-note">1. Открой <b>github.com/settings/tokens</b> → Generate new token → <b>Tokens (classic)</b>.<br>2. В Scopes отметь только <b>gist</b>.<br>3. Скопируй токен (вида <code>ghp_…</code>) и вставь ниже.</div></div>
@@ -3386,15 +3432,18 @@ function exportCSV(){
 function importData(ev) {
   const file=ev.target.files[0]; if(!file)return; const r=new FileReader();
   r.onload=async ()=>{ try{ const data=JSON.parse(r.result);
-    if(!data || typeof data!=='object' || !Array.isArray(data.accounts) || !Array.isArray(data.envelopes) || !Array.isArray(data.currencies) || !Array.isArray(data.transactions)) throw 0;
+    if(!isValidState(data)) throw 0;   // P0.1: та же строгая проверка, что и для облака
     if(!await confirmSheet('Заменить текущие данные данными из файла? Перед заменой создам резервную копию текущих данных.',{okText:'Заменить',danger:true}))return;
-    try{ await createBackup('pre-import'); }catch(e){}
+    let bk=true; try{ await createBackup('pre-import'); }catch(e){ bk=false; }
+    if(!bk && !await confirmSheet('Не удалось создать резервную копию текущих данных. Всё равно заменить (текущие данные будут потеряны)?',{okText:'Заменить',danger:true}))return;   // P0.2
     state=data; normalize(); save(); toast('Импортировано ✓'); render();
   }catch(e){ toast('Файл повреждён или не подходит'); } }; r.readAsText(file); ev.target.value='';
 }
 async function resetAll() {
   if(!await confirmSheet('Удалить ВСЕ данные и начать заново? Все операции, счета, конверты и долги будут стёрты. Сделай экспорт заранее. Перед сбросом создам резервную копию.',{okText:'Сбросить всё',danger:true}))return;
-  createBackup('pre-reset').catch(()=>{}).finally(()=>{ localStorage.removeItem(LS_KEY); state=defaultState(); save(); toast('Сброшено'); moreView=null; render(); });
+  let okbk=true; try{ await createBackup('pre-reset'); }catch(e){ okbk=false; }
+  if(!okbk && !await confirmSheet('Не удалось создать резервную копию. Всё равно стереть ВСЕ данные без копии?',{okText:'Стереть',danger:true})) return;   // P0-e: не стираем в finally несмотря на провал копии
+  localStorage.removeItem(LS_KEY); state=defaultState(); save(); toast('Сброшено'); moreView=null; render();
 }
 
 /* ---------- Импорт банковской выписки (CSV) — пункт 4 ---------- */
@@ -3495,7 +3544,8 @@ async function runCsvImport(){
   // Этап 3: авто-категоризация по истории (payee memory) — описание из прошлых операций → категория.
   const noteCat={}; state.transactions.forEach(t=>{ if((t.type==='expense'||t.type==='income')&&t.note&&t.categoryId){ const k=t.note.trim().toLowerCase(); if(k) noteCat[k]={cat:t.categoryId,inc:t.type==='income'}; } });
   let added=0,dup=0,catn=0;
-  try{ await createBackup('pre-import'); }catch(e){}
+  let okbk=true; try{ await createBackup('pre-import'); }catch(e){ okbk=false; }
+  if(!okbk && !await confirmSheet('Не удалось создать резервную копию. Всё равно импортировать?',{okText:'Импортировать'})) return;   // P1: проверяем копию перед CSV-импортом
   for(const r of d.body){ const dt=parseCsvDate(r[d.map.date],d.dateOrder), am=parseCsvAmount(r[d.map.amount]); if(!dt||am==null||Math.abs(am)<0.0001) continue;
     const note=d.map.note>=0?String(r[d.map.note]||'').trim():''; const amt=round2(Math.abs(am));
     const isInc=d.sign==='income'||(d.sign==='auto'&&am>0);
